@@ -68,17 +68,21 @@ class EngineTests(unittest.TestCase):
         self.assertAlmostEqual(cents(self.steady_pitch(x, sr, 0.2, 0.55), 440.0), 0.0, delta=0.5)
 
     def test_octave_selector(self):
+        # Octave -2 moves the bird down the keyboard: A4 sounds two octaves higher.
         x, sr = self.render("0 on 69 100\n0.6 off 69\n", sets=["octave=-2", *STEADY])
+        self.assertAlmostEqual(cents(self.steady_pitch(x, sr, 0.2, 0.55), 1760.0), 0.0, delta=0.5)
+        x, sr = self.render("0 on 69 100\n0.6 off 69\n", sets=["octave=2", *STEADY])
         self.assertAlmostEqual(cents(self.steady_pitch(x, sr, 0.2, 0.55), 110.0), 0.0, delta=0.5)
 
     def test_transpose_semitones_and_cents(self):
-        x, sr = self.render("0 on 69 100\n0.6 off 69\n", sets=["octave=-1", "transposeSemitones=-5", "transposeCents=-30", *STEADY])
-        self.assertAlmostEqual(cents(self.steady_pitch(x, sr, 0.2, 0.55), 440.0), -1200 - 500 - 30, delta=0.5)
+        # Same direction as the octave: negative values make the key sound higher.
+        x, sr = self.render("0 on 57 100\n0.6 off 57\n", sets=["octave=-1", "transposeSemitones=-5", "transposeCents=-30", *STEADY])
+        self.assertAlmostEqual(cents(self.steady_pitch(x, sr, 0.2, 0.55), 220.0), 1200 + 500 + 30, delta=0.5)
 
-    def test_seven_octaves_down(self):
-        # The sparrow's top whistle (C8 at octave 0, about 4.3 kHz) lands near 34 Hz.
-        x, sr = self.render("0 on 108 100\n1.0 off 108\n", SPARROW, ["octave=-7", *STEADY])
-        expected = 440.0 * 2 ** ((108 - 69 + 0.49 - 84) / 12)
+    def test_seven_octaves_down_the_keyboard(self):
+        # At -7 the sparrow's top whistle (C8 at octave 0, about 4.3 kHz) is played on C1.
+        x, sr = self.render("0 on 24 100\n1.0 off 24\n", SPARROW, ["octave=-7", *STEADY])
+        expected = 440.0 * 2 ** ((24 - 69 + 0.49 + 84) / 12)
         self.assertAlmostEqual(cents(self.steady_pitch(x, sr, 0.3, 0.95), expected), 0, delta=1)
 
     def test_sparrow_temperament(self):
@@ -124,10 +128,18 @@ class EngineTests(unittest.TestCase):
         self.assertLess(np.abs(x[int(0.51 * sr):]).max(), 1e-4)
 
     def test_default_echo_level(self):
-        # The sparrow's default echo starts about 19 dB below the note, like the recording.
-        x, sr = self.render("0.1 on 79 90\n0.5 off 79\n", SPARROW, ["wobbleLevel=0"], tail=1.2)
-        tail = self.level_db(x, sr, 0.54, 0.59) - self.level_db(x, sr, 0.3, 0.45)
-        self.assertAlmostEqual(tail, -19, delta=2.5)
+        # The sparrow's default echo sits about 19 dB below the note, like the recording.
+        # A pure tone's tail swings about +-6 dB with pitch, so average the song's three pitches.
+        tails = []
+        for key in (79, 83, 84):
+            for seed in (1, 2, 3):
+                d = Path(self.tmp.name)
+                (d / "e.txt").write_text(f"0.1 on {key} 90\n0.5 off {key}\n")
+                subprocess.run([self.render_bin, "--preset", str(SPARROW), "--score", str(d / "e.txt"), "--out", str(d / "e.wav"),
+                                "--mono", "--tail", "1.2", "--seed", str(seed), "--set", "wobbleLevel=0"], check=True)
+                x, sr = sf.read(d / "e.wav")
+                tails.append(self.level_db(x, sr, 0.54, 0.59) - self.level_db(x, sr, 0.3, 0.45))
+        self.assertAlmostEqual(float(np.mean(tails)), -19, delta=2)
 
     def test_legato_glides_without_new_attack(self):
         score = "0 on 69 100\n0.4 on 71 100\n0.45 off 69\n0.8 off 71\n"

@@ -21,8 +21,9 @@ public:
     void process (const float* in, float* outL, float* outR, int numSamples);
 
     // Gain applied to the wet signal for a given panel value. The default
-    // sparrow value (0.47) puts the first reflections about 19 dB below the dry note.
-    static float wetGain (float wet) { return wet * wet * 2.4f; }
+    // sparrow value (0.47) puts the echo about 19 dB below the note, averaged over
+    // the sparrow's pitches (a pure tone's tail swings about +-6 dB with pitch).
+    static float wetGain (float wet) { return wet * wet * 1.6f; }
 
 private:
     static constexpr int kLines = 8;

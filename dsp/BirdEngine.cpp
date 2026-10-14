@@ -15,7 +15,7 @@ namespace
     constexpr double kChirpUp = 0.018;      // measured: 18 ms upsweep
     constexpr double kChirpDown = 0.020;    // measured: 20 ms downslur
     constexpr double kChirpLowRatio = 0.5;  // estimate for the fainter lower voice; refine with the matching loop
-    constexpr double kBeakFixedHz = 3000.0; // beak resonance at real bird pitch when tracking is 0
+    constexpr double kBeakFixedHz = 3000.0; // beak resonance when tracking is 0
 
     inline float dbToGain (float db) { return std::pow (10.0f, db / 20.0f); }
     inline double semisToHz (double semis) { return 440.0 * std::exp2 ((semis - 69.0) / 12.0); }
@@ -92,11 +92,12 @@ double BirdEngine::semitonesForKey (int note) const
     return note + transposeSemitones() + cents / 100.0;
 }
 
-// The octave selector with its semitone and cent steps: shifts the whole
-// voice (and the beak resonance with it) without changing the bird's intervals.
+// The octave selector with its semitone and cent steps moves the bird down the
+// keyboard: at -2 octaves you play two octaves lower and it sounds two octaves
+// above the key (up to 7). The bird's intervals never change.
 double BirdEngine::transposeSemitones() const
 {
-    return 12.0 * params[kOctave] + params[kTransposeSemis] + params[kTransposeCents] / 100.0;
+    return -(12.0 * params[kOctave] + params[kTransposeSemis] + params[kTransposeCents] / 100.0);
 }
 
 double BirdEngine::keyFrequency (int note) const { return semisToHz (semitonesForKey (note)); }
@@ -399,7 +400,7 @@ float BirdEngine::renderSample()
     }
 
     // Beak and throat: a bandpass whose centre follows the pitch.
-    const double fixedHz = kBeakFixedHz * std::exp2 (transposeSemitones() / 12.0);
+    const double fixedHz = kBeakFixedHz;
     const double fc = std::min (std::exp (std::log (fixedHz) + (std::log (f0) - std::log (fixedHz)) * params[kBeakTracking]), sr * 0.45);
     const float q = 8.0f + (1.0f - 8.0f) * openness;
     const float g = (float) std::tan (kPi * fc / sr);

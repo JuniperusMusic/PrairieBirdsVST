@@ -26,6 +26,8 @@ struct ParamDef
 };
 
 // X(Enum, id, name, section, kind, min, max, default, unit, choices, onPanel)
+// Octave, Semitone and Cents move the bird down the keyboard: -2 octaves means
+// you play two octaves lower and hear the bird two octaves above the key.
 // Defaults are the "Init" sound: equal temperament, plain whistle.
 #define PBV_PARAMS(X) \
     /* Voice */ \
