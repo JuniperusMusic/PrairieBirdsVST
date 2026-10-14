@@ -44,8 +44,10 @@ terminal as administrator).
 
 - Load **Prairie Bird Voice** on an instrument track and pick **White-throated
   Sparrow** from the preset menu.
-- The sparrow's root is G. Its three whistles are **C, B, G**: play them as
-  separate notes, about 0.6, 0.45 and 0.35 s long.
+- The sparrow's root is G. Its three whistles are **C8, B7, G7** (MIDI 108,
+  107, 103): play them as separate notes, about 0.6, 0.45 and 0.35 s long.
+  At octave -2 they sound two octaves below the bird, near 1 kHz; at octave 0
+  they sound at the bird's real 3-4.4 kHz.
 - Strike the first key hard (velocity 100 or more) for the intro chirp. The
   whistle then starts about 180 ms later, like the bird.
 - Overlapping (legato) notes glide without a new attack.

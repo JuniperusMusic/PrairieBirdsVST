@@ -80,13 +80,13 @@ def track(x: np.ndarray, sr: int, fmin: float = 300.0, fmax: float = 9000.0) -> 
             continue
         a, b, c = np.log(spec[i, ki - 1:ki + 2])
         denom = a - 2 * b + c
-        p = 0.5 * (a - c) / denom if denom != 0 else 0.0
+        p = float(np.clip(0.5 * (a - c) / denom, -0.5, 0.5)) if denom != 0 else 0.0  # flat spectra (silence) can't run away
         f = (ki + p) * sr / nfft
         f0[i] = f
         peak = b
         for mult, out in ((2, h2), (3, h3)):
             kk = int(round(f * mult * nfft / sr))
-            if kk + 2 < len(freqs):
+            if 2 <= kk and kk + 2 < len(freqs):
                 out[i] = 20 / math.log(10) * (np.log(spec[i, kk - 2:kk + 3].max()) - peak)
     return Track(t, f0, level, h2, h3)
 

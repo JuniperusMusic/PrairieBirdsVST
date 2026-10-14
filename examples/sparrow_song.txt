@@ -1,0 +1,8 @@
+# White-throated sparrow song, at the lengths and gaps measured in XC993033.
+# Render: pbv_render --preset presets/white_throated_sparrow.json --score examples/sparrow_song.txt --out song.wav
+0.000 on 108 110    # C8: hard hit, so the intro chirp plays and the whistle follows 180 ms later
+0.780 off 108
+0.995 on 107 100    # B7
+1.445 off 107
+1.585 on 103 100    # G7
+1.955 off 103
