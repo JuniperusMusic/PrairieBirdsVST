@@ -46,8 +46,11 @@ terminal as administrator).
   Sparrow** from the preset menu.
 - The sparrow's root is G. Its three whistles are **C8, B7, G7** (MIDI 108,
   107, 103): play them as separate notes, about 0.6, 0.45 and 0.35 s long.
-  At octave -2 they sound two octaves below the bird, near 1 kHz; at octave 0
-  they sound at the bird's real 3-4.4 kHz.
+  At octave 0 they sound at the bird's real 3-4.4 kHz; the default octave -2
+  plays them two octaves lower, near 1 kHz.
+- The octave selector shifts the sound from 7 octaves down to 3 up, with
+  semitone (-11 to +11) and cent (-100 to +100) steps on top. The bird's
+  intervals stay the same.
 - Strike the first key hard (velocity 100 or more) for the intro chirp. The
   whistle then starts about 180 ms later, like the bird.
 - Overlapping (legato) notes glide without a new attack.

@@ -9,7 +9,7 @@ score that plays them on the keys nearest their pitch, renders that score
 with pbv_render, measures the render exactly like the recording, and nudges
 the chosen settings (Nelder-Mead) until pitch contour and loudness shape
 match. Renders are made at real bird pitch (octave 0); the saved preset keeps
-its own octave. Notes are played at full velocity, so the matched values are
+its own octave and transposition. Notes are played at full velocity, so the matched values are
 what a hard key press produces.
 
 The result is a new preset plus a report. A close measurement isn't proof of
@@ -131,7 +131,7 @@ class Matcher:
         self.evals = 0
 
     def overrides(self, values):
-        sets = {"octave": 0, "chirpThreshold": 128}
+        sets = {"octave": 0, "transposeSemitones": 0, "transposeCents": 0, "chirpThreshold": 128}
         sets.update({k: v for k, v in zip(self.fit, values)})
         return sets
 

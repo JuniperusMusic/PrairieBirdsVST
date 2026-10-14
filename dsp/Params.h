@@ -30,7 +30,9 @@ struct ParamDef
 #define PBV_PARAMS(X) \
     /* Voice */ \
     X(BreathMode,     "breathMode",     "Breath mode",          Voice,  Bool,   0,    1,    0,     "",      "",  true)  \
-    X(Octave,         "octave",         "Octave",               Voice,  Int,   -3,    3,   -2,     "oct",   "",  true)  \
+    X(Octave,         "octave",         "Octave",               Voice,  Int,   -7,    3,   -2,     "oct",   "",  true)  \
+    X(TransposeSemis, "transposeSemitones","Semitone",          Voice,  Int,   -11,   11,   0,     "st",    "",  true)  \
+    X(TransposeCents, "transposeCents", "Cents",                Voice,  Float, -100,  100,  0,     "ct",    "",  true)  \
     X(Purity,         "purity",         "Purity",               Voice,  Float,  0,    1,    0.8f,  "",      "",  true)  \
     X(SecondVoice,    "secondVoice",    "Second voice",         Voice,  Float,  0,    1,    0,     "",      "",  true)  \
     X(SecondInterval, "secondInterval", "Second voice interval",Voice,  Float, -24,   24,  -12,    "st",    "",  true)  \

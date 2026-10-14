@@ -64,6 +64,7 @@ private:
     };
 
     double semitonesForKey (int note) const;
+    double transposeSemitones() const;
     void startAttack();
     void startNewNote (int note, int velocity);
     void legatoTo (int note);

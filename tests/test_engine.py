@@ -71,6 +71,16 @@ class EngineTests(unittest.TestCase):
         x, sr = self.render("0 on 69 100\n0.6 off 69\n", sets=["octave=-2", *STEADY])
         self.assertAlmostEqual(cents(self.steady_pitch(x, sr, 0.2, 0.55), 110.0), 0.0, delta=0.5)
 
+    def test_transpose_semitones_and_cents(self):
+        x, sr = self.render("0 on 69 100\n0.6 off 69\n", sets=["octave=-1", "transposeSemitones=-5", "transposeCents=-30", *STEADY])
+        self.assertAlmostEqual(cents(self.steady_pitch(x, sr, 0.2, 0.55), 440.0), -1200 - 500 - 30, delta=0.5)
+
+    def test_seven_octaves_down(self):
+        # The sparrow's top whistle (C8 at octave 0, about 4.3 kHz) lands near 34 Hz.
+        x, sr = self.render("0 on 108 100\n1.0 off 108\n", SPARROW, ["octave=-7", *STEADY])
+        expected = 440.0 * 2 ** ((108 - 69 + 0.49 - 84) / 12)
+        self.assertAlmostEqual(cents(self.steady_pitch(x, sr, 0.3, 0.95), expected), 0, delta=1)
+
     def test_sparrow_temperament(self):
         # Root G: B is tuned -34 cents and C +49, giving the measured 366 and 549 cent steps.
         score = "0 on 67 100\n0.5 off 67\n0.7 on 71 100\n1.2 off 71\n1.4 on 72 100\n1.9 off 72\n"
