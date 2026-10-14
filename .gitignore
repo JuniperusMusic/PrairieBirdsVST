@@ -1,0 +1,14 @@
+build*/
+dist/
+.vs/
+.vscode/
+*.user
+__pycache__/
+*.pyc
+
+# Reference recordings are used only for measuring and stay out of the repo
+# (licence terms, and the plugin must never contain recorded audio).
+recordings/
+*.wav
+*.mp3
+*.flac
