@@ -68,20 +68,19 @@ class EngineTests(unittest.TestCase):
         self.assertAlmostEqual(cents(self.steady_pitch(x, sr, 0.2, 0.55), 440.0), 0.0, delta=0.5)
 
     def test_octave_selector(self):
-        # Octave -2 moves the bird down the keyboard: A4 sounds two octaves higher.
-        x, sr = self.render("0 on 69 100\n0.6 off 69\n", sets=["octave=-2", *STEADY])
-        self.assertAlmostEqual(cents(self.steady_pitch(x, sr, 0.2, 0.55), 1760.0), 0.0, delta=0.5)
-        x, sr = self.render("0 on 69 100\n0.6 off 69\n", sets=["octave=2", *STEADY])
-        self.assertAlmostEqual(cents(self.steady_pitch(x, sr, 0.2, 0.55), 110.0), 0.0, delta=0.5)
+        # + sounds higher: at the default octave +3, A4 sounds three octaves up.
+        x, sr = self.render("0 on 69 100\n0.6 off 69\n", sets=[*STEADY])
+        self.assertAlmostEqual(cents(self.steady_pitch(x, sr, 0.2, 0.55), 3520.0), 0.0, delta=0.5)
 
     def test_transpose_semitones_and_cents(self):
-        # Same direction as the octave: negative values make the key sound higher.
-        x, sr = self.render("0 on 57 100\n0.6 off 57\n", sets=["octave=-1", "transposeSemitones=-5", "transposeCents=-30", *STEADY])
+        x, sr = self.render("0 on 57 100\n0.6 off 57\n", sets=["octave=1", "transposeSemitones=5", "transposeCents=30", *STEADY])
         self.assertAlmostEqual(cents(self.steady_pitch(x, sr, 0.2, 0.55), 220.0), 1200 + 500 + 30, delta=0.5)
+        x, sr = self.render("0 on 69 100\n0.6 off 69\n", sets=["octave=0", "transposeSemitones=-11", "transposeCents=-50", *STEADY])
+        self.assertAlmostEqual(cents(self.steady_pitch(x, sr, 0.2, 0.55), 440.0), -1150, delta=0.5)
 
-    def test_seven_octaves_down_the_keyboard(self):
-        # At -7 the sparrow's top whistle (C8 at octave 0, about 4.3 kHz) is played on C1.
-        x, sr = self.render("0 on 24 100\n1.0 off 24\n", SPARROW, ["octave=-7", *STEADY])
+    def test_seven_octaves_up(self):
+        # At +7 the sparrow's top whistle (C8 at octave 0, about 4.3 kHz) is played on C1.
+        x, sr = self.render("0 on 24 100\n1.0 off 24\n", SPARROW, ["octave=7", *STEADY])
         expected = 440.0 * 2 ** ((24 - 69 + 0.49 + 84) / 12)
         self.assertAlmostEqual(cents(self.steady_pitch(x, sr, 0.3, 0.95), expected), 0, delta=1)
 
@@ -131,7 +130,7 @@ class EngineTests(unittest.TestCase):
         # The sparrow's default echo sits about 19 dB below the note, like the recording.
         # A pure tone's tail swings about +-6 dB with pitch, so average the song's three pitches.
         tails = []
-        for key in (79, 83, 84):
+        for key in (67, 71, 72):  # the song's keys at the sparrow's octave +3
             for seed in (1, 2, 3):
                 d = Path(self.tmp.name)
                 (d / "e.txt").write_text(f"0.1 on {key} 90\n0.5 off {key}\n")

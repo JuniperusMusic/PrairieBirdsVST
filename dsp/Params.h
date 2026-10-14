@@ -26,13 +26,12 @@ struct ParamDef
 };
 
 // X(Enum, id, name, section, kind, min, max, default, unit, choices, onPanel)
-// Octave, Semitone and Cents move the bird down the keyboard: -2 octaves means
-// you play two octaves lower and hear the bird two octaves above the key.
+// Octave, Semitone and Cents transpose the voice: + sounds higher than the key.
 // Defaults are the "Init" sound: equal temperament, plain whistle.
 #define PBV_PARAMS(X) \
     /* Voice */ \
     X(BreathMode,     "breathMode",     "Breath mode",          Voice,  Bool,   0,    1,    0,     "",      "",  true)  \
-    X(Octave,         "octave",         "Octave",               Voice,  Int,   -7,    3,   -2,     "oct",   "",  true)  \
+    X(Octave,         "octave",         "Octave",               Voice,  Int,    0,    7,    3,     "oct",   "",  true)  \
     X(TransposeSemis, "transposeSemitones","Semitone",          Voice,  Int,   -11,   11,   0,     "st",    "",  true)  \
     X(TransposeCents, "transposeCents", "Cents",                Voice,  Float, -100,  100,  0,     "ct",    "",  true)  \
     X(Purity,         "purity",         "Purity",               Voice,  Float,  0,    1,    0.8f,  "",      "",  true)  \

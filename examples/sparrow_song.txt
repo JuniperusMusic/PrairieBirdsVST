@@ -1,9 +1,9 @@
 # White-throated sparrow song, at the lengths and gaps measured in XC993033.
-# At the default octave -2 this sounds at the bird's real pitch (about 4.3, 3.9 and 3.1 kHz).
+# At the sparrow's octave +3 this sounds at the bird's real pitch (about 4.3, 3.9 and 3.1 kHz).
 # Render: pbv_render --preset presets/white_throated_sparrow.json --score examples/sparrow_song.txt --out song.wav
-0.000 on 84  110    # C6: hard hit, so the intro chirp plays and the whistle follows 180 ms later
-0.780 off 84
-0.995 on 83  100    # B5
-1.445 off 83
-1.585 on 79  100    # G5
-1.955 off 79
+0.000 on 72  110    # C5: hard hit, so the intro chirp plays and the whistle follows 180 ms later
+0.780 off 72
+0.995 on 71  100    # B4
+1.445 off 71
+1.585 on 67  100    # G4
+1.955 off 67

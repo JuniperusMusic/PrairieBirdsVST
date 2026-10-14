@@ -1,9 +1,9 @@
 {
   "name": "White-throated Sparrow",
   "beakType": "conical",
-  "source": "Matched to xeno-canto XC993033 (CC BY-SA 4.0), used only for measuring. Root G: the song is C, B, G (high to low).",
+  "source": "Matched to xeno-canto XC993033 (CC BY-SA 4.0), used only for measuring. Root G: at octave +3 the song is C5, B4, G4 (high to low), at the bird's real pitch.",
   "params": {
-    "octave": -2,
+    "octave": 3,
     "purity": 0.79,
     "secondVoice": 0,
     "volume": 0,

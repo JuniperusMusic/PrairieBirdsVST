@@ -92,12 +92,11 @@ double BirdEngine::semitonesForKey (int note) const
     return note + transposeSemitones() + cents / 100.0;
 }
 
-// The octave selector with its semitone and cent steps moves the bird down the
-// keyboard: at -2 octaves you play two octaves lower and it sounds two octaves
-// above the key (up to 7). The bird's intervals never change.
+// The octave selector with its semitone and cent steps transposes the whole
+// voice (+ sounds higher, up to 7 octaves). The bird's intervals never change.
 double BirdEngine::transposeSemitones() const
 {
-    return -(12.0 * params[kOctave] + params[kTransposeSemis] + params[kTransposeCents] / 100.0);
+    return 12.0 * params[kOctave] + params[kTransposeSemis] + params[kTransposeCents] / 100.0;
 }
 
 double BirdEngine::keyFrequency (int note) const { return semisToHz (semitonesForKey (note)); }
