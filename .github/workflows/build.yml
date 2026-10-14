@@ -19,24 +19,31 @@ jobs:
           path: build/_deps
           key: juce-9.0.4-${{ runner.os }}
 
+      # Ninja + the MSVC environment works with whichever Visual Studio the
+      # runner image has, instead of naming one version.
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
       - name: Configure
-        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
-        run: cmake --build build --config Release --parallel
+        run: cmake --build build --parallel
 
       - name: Test engine
         shell: bash
         run: |
           pip install numpy scipy soundfile
-          PBV_RENDER="build/tools/render/Release/pbv_render.exe" python -m unittest discover tests -v
+          PBV_RENDER="build/tools/render/pbv_render.exe" python -m unittest discover tests -v
 
       - name: Package
         shell: bash
         run: |
           mkdir -p dist
           cp -r "build/plugin/PrairieBirdVoice_artefacts/Release/VST3/Prairie Bird Voice.vst3" dist/
-          cp build/tools/render/Release/pbv_render.exe dist/
+          cp build/tools/render/pbv_render.exe dist/
           cp -r presets dist/
 
       - uses: actions/upload-artifact@v4

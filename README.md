@@ -26,16 +26,16 @@ repo's **Actions** tab, pick the latest *Build* run, and download
 `PrairieBirdVoice-windows`. Copy `Prairie Bird Voice.vst3` into
 `C:\Program Files\Common Files\VST3`, then rescan plugins in Cubase.
 
-**Building on your PC** (Visual Studio 2022 Build Tools with C++, CMake, Git):
+**Building on your PC** (Visual Studio Build Tools with C++, CMake, Git):
 
 ```
 git clone https://github.com/JuniperusMusic/PrairieBirdsVST.git
 cd PrairieBirdsVST
-cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+cmake -S . -B build -A x64
 cmake --build build --config Release
 ```
 
-The first configure downloads JUCE 9.0.4. The plugin lands in
+CMake picks the newest Visual Studio it finds. The first configure downloads JUCE 9.0.4. The plugin lands in
 `build/plugin/PrairieBirdVoice_artefacts/Release/VST3/`. Add
 `-DPBV_COPY_PLUGIN=ON` to copy it into the VST3 folder automatically (run the
 terminal as administrator).
