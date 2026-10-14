@@ -42,6 +42,12 @@ public:
     // Pitch in Hz a key plays with the current tuning, before any movement.
     double keyFrequency (int note) const;
 
+    // Breath range learning: while on, the lowest and highest breath (CC2)
+    // values are recorded. end returns false if too little breath was seen;
+    // otherwise floor sits just above the resting value and ceiling at the peak.
+    void beginBreathLearn();
+    bool endBreathLearn (int& floor, int& ceiling);
+
 private:
     enum class Stage { Idle, Waiting, Attack, Sustain, Release };
 
@@ -68,6 +74,8 @@ private:
     void startAttack();
     void startNewNote (int note, int velocity);
     void legatoTo (int note);
+    void startGlide (double target);
+    float shapeBreath (int cc) const;
     void startRelease();
     float renderSample();
 
@@ -117,7 +125,20 @@ private:
     // Beak resonance (TPT state-variable bandpass)
     float ic1 = 0.0f, ic2 = 0.0f;
 
+    // Legato articulation: a short loudness dip, the pitch changing at its lowest point
+    double dipT = 1.0e9, dipDur = 0.0;
+    float dipFloor = 1.0f;
+    bool glidePending = false;
+    double pendingTarget = 0.0, pendingDelay = 0.0;
+
+    // Overblow: which overtone of the note sounds (1 = the note itself), and the smoothed shift
+    int overtone = 1;
+    double overblowSemis = 0.0;
+
     // Controllers
+    int breathRaw = 0;
+    bool learning = false;
+    int learnMin = 127, learnMax = 0;
     float breathTarget = 0.0f, breath = 0.0f, breathCoeff = 0.0f;
     float aftertouch = 0.0f;
     double bendSemis = 0.0;

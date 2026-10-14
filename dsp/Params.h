@@ -41,8 +41,22 @@ struct ParamDef
     X(Volume,         "volume",         "Volume",               Voice,  Float, -60,   6,   -6,     "dB",    "",  true)  \
     X(BendRange,      "bendRange",      "Pitch bend range",     Voice,  Int,    0,    12,   2,     "st",    "",  false) \
     X(BreathEdge,     "breathEdge",     "Breath edge",          Voice,  Float,  0,    1,    0.3f,  "",      "",  false) \
+    /* Breath controller response: your controller's setup, not the bird's, so presets leave these alone */ \
+    X(BreathFloor,    "breathFloor",    "Breath floor",         Voice,  Int,    0,    126,  0,     "CC",    "",  true)  \
+    X(BreathCeiling,  "breathCeiling",  "Breath ceiling",       Voice,  Int,    1,    127,  127,   "CC",    "",  true)  \
+    X(BreathCurve,    "breathCurve",    "Breath curve",         Voice,  Float,  0.25f,4,    1.4f,  "",      "",  true)  \
+    X(BreathLearn,    "breathLearn",    "Learn breath range",   Voice,  Bool,   0,    1,    0,     "",      "",  true)  \
+    /* Overblow: harder breath climbs the overtone series (breath mode only) */ \
+    X(OverblowOn,     "overblowOn",     "Overblow",             Voice,  Bool,   0,    1,    0,     "",      "",  true)  \
+    X(Overblow2,      "overblow2",      "Overtone 2 at",        Voice,  Float,  0,    1,    0.75f, "",      "",  true)  \
+    X(Overblow3,      "overblow3",      "Overtone 3 at",        Voice,  Float,  0,    1,    0.85f, "",      "",  true)  \
+    X(Overblow4,      "overblow4",      "Overtone 4 at",        Voice,  Float,  0,    1,    0.93f, "",      "",  true)  \
+    X(Overblow5,      "overblow5",      "Overtone 5 at",        Voice,  Float,  0,    1,    1,     "",      "",  true)  \
+    X(OverblowHyst,   "overblowHysteresis","Overblow hysteresis",Voice, Float,  0,    0.3f, 0.05f, "",      "",  true)  \
+    X(OverblowTime,   "overblowTime",   "Overblow time",        Voice,  Float,  1,    100,  12,    "ms",    "",  true)  \
     /* Attack */ \
     X(Onset,          "onset",          "Onset",                Attack, Float,  1,    500,  83,    "ms",    "",  true)  \
+    X(BreathAttack,   "breathAttack",   "Breath attack minimum",Attack, Float,  1,    200,  25,    "ms",    "",  true)  \
     X(Release,        "release",        "Release",              Attack, Float,  2,    1000, 10,    "ms",    "",  true)  \
     X(ScoopDepth,     "scoopDepth",     "Scoop depth",          Attack, Float,  0,    200,  48,    "ct",    "",  true)  \
     X(ScoopDir,       "scoopDir",       "Scoop direction",      Attack, Choice, 0,    2,    0,     "",      "Auto|From below|From above", true) \
@@ -64,6 +78,8 @@ struct ParamDef
     X(GlideAmount,    "glideAmount",    "Glide amount",         Glide,  Float,  0,    1,    0.1f,  "",      "",  true)  \
     X(GlideTime,      "glideTime",      "Glide time",           Glide,  Float,  5,    1000, 60,    "ms",    "",  true)  \
     X(GlideCurve,     "glideCurve",     "Glide curve",          Glide,  Float, -1,    1,    0,     "",      "",  true)  \
+    X(LegatoDip,      "legatoDip",      "Legato dip",           Glide,  Float,  0,    40,   12,    "dB",    "",  true)  \
+    X(LegatoDipTime,  "legatoDipTime",  "Legato dip time",      Glide,  Float,  5,    150,  40,    "ms",    "",  true)  \
     /* Drift */ \
     X(DriftAmount,    "driftAmount",    "Drift amount",         Drift,  Float,  0,    50,   2,     "ct",    "",  true)  \
     X(DriftSpeed,     "driftSpeed",     "Drift speed",          Drift,  Float,  0.05f,10,   0.5f,  "Hz",    "",  true)  \
@@ -120,6 +136,13 @@ inline const ParamDef& paramDef (int index)
 #undef PBV_DEF
     };
     return defs[index];
+}
+
+// Settings that belong to the player's controller setup: loading a bird preset leaves them as they are.
+inline bool isPlayerSetting (int index)
+{
+    return index == kBreathMode || index == kBreathFloor || index == kBreathCeiling
+        || index == kBreathCurve || index == kBreathLearn;
 }
 
 // Returns -1 if the id is unknown.

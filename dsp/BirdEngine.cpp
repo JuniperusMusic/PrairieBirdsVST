@@ -61,7 +61,12 @@ void BirdEngine::reset()
     phase = phase2 = chirpPhase = chirpLowPhase = 0.0;
     ic1 = ic2 = 0.0f;
     breath = breathTarget = 0.0f;
+    breathRaw = 0;
     aftertouch = 0.0f;
+    dipT = 1.0e9;
+    glidePending = false;
+    overtone = 1;
+    overblowSemis = 0.0;
     bendSemis = 0.0;
     everPlayed = false;
     timeSinceRelease = 1.0e9;
@@ -82,6 +87,33 @@ void BirdEngine::setParams (const ParamValues& p)
 {
     params = p;
     echo.setParams (p[kEchoWet], p[kEchoDecay]);
+    breathTarget = shapeBreath (breathRaw); // floor, ceiling or curve may have changed
+}
+
+// Breath response: the floor (just above the controller's resting value) reads
+// as silence, the ceiling as full breath, and the curve shapes what is between.
+float BirdEngine::shapeBreath (int cc) const
+{
+    const float lo = params[kBreathFloor];
+    const float hi = std::max (lo + 1.0f, params[kBreathCeiling]);
+    const float x = std::clamp ((cc - lo) / (hi - lo), 0.0f, 1.0f);
+    return std::pow (x, params[kBreathCurve]);
+}
+
+void BirdEngine::beginBreathLearn()
+{
+    learning = true;
+    learnMin = 127;
+    learnMax = 0;
+}
+
+bool BirdEngine::endBreathLearn (int& floor, int& ceiling)
+{
+    learning = false;
+    if (learnMax - learnMin < 8) return false; // not enough breath seen to trust
+    floor = std::min (learnMin + 2, 125);
+    ceiling = std::max (learnMax, floor + 1);
+    return true;
 }
 
 double BirdEngine::semitonesForKey (int note) const
@@ -144,7 +176,11 @@ void BirdEngine::controller (int cc, int value)
 {
     switch (cc)
     {
-        case 2:   breathTarget = value / 127.0f; break; // breath controller
+        case 2:   // breath controller
+            breathRaw = value;
+            if (learning) { learnMin = std::min (learnMin, value); learnMax = std::max (learnMax, value); }
+            breathTarget = shapeBreath (value);
+            break;
         case 120: reset(); break;                       // all sound off
         case 123: allNotesOff(); break;
         default:  break; // MIDI learn and the nanoKONTROL2 map live in the plugin (stage 8)
@@ -215,17 +251,26 @@ void BirdEngine::startNewNote (int note, int velocity)
 
 void BirdEngine::startAttack()
 {
-    const float resp = params[kVelResponse];
-    // Hard hits start faster: velocity 127 halves the onset time at full response.
-    const double speed = 1.0 + ((1.5 - noteVel) - 1.0) * resp;
-    envDur = std::max (0.001, params[kOnset] * 0.001 * speed);
+    const bool breathMode = params[kBreathMode] >= 0.5f;
+    if (breathMode)
+    {
+        // The breath shapes the attack; this only stops a note started on
+        // strong breath from snapping on faster than the minimum.
+        envDur = std::max (0.001, params[kBreathAttack] * 0.001);
+    }
+    else
+    {
+        const float resp = params[kVelResponse];
+        // Hard hits start faster: velocity 127 halves the onset time at full response.
+        const double speed = 1.0 + ((1.5 - noteVel) - 1.0) * resp;
+        envDur = std::max (0.001, params[kOnset] * 0.001 * speed);
+    }
     envT = 0.0;
     envStart = env;
     stage = Stage::Attack;
     scoopT = 0.0;
 
     // The burst is a puff of air: in breath mode it follows the breath, not the key.
-    const bool breathMode = params[kBreathMode] >= 0.5f;
     burst = params[kBreathBurst] * 0.3f * (breathMode ? breathTarget : velGain);
     burstDecay = (float) std::exp (-1.0 / (0.012 * sr));
 }
@@ -234,23 +279,41 @@ void BirdEngine::legatoTo (int note)
 {
     currentNote = note;
     const double target = semitonesForKey (note);
-    sagActive = false;
-    noteAge = 0.0;
 
     if (stage == Stage::Waiting)
     {
         basePitch = target; // the whistle hasn't started yet
+        sagActive = false;
         return;
     }
 
-    const float amount = params[kGlideAmount];
-    double from = basePitch;
-    if (gliding)
+    // Articulate like a bird: dip the loudness and change pitch at the quietest point.
+    if (params[kLegatoDip] > 0.0f)
     {
-        const double p = std::clamp (glideT / glideDur, 0.0, 1.0);
-        from = glideFrom + (glideTo - glideFrom) * p;
+        dipT = 0.0;
+        dipDur = std::max (0.005, params[kLegatoDipTime] * 0.001);
+        dipFloor = dbToGain (-params[kLegatoDip]);
+        pendingTarget = target;
+        pendingDelay = dipDur * 0.5;
+        glidePending = true;
+        return;
     }
 
+    startGlide (target);
+}
+
+void BirdEngine::startGlide (double target)
+{
+    glidePending = false;
+
+    // basePitch is where the glide (if any) has reached; carry the first
+    // note's sag into the move so the pitch never jumps back.
+    double from = basePitch;
+    if (sagActive) from += params[kDriftSag] * noteAge / 100.0;
+    sagActive = false;
+    noteAge = 0.0;
+
+    const float amount = params[kGlideAmount];
     if (amount <= 0.0f)
     {
         basePitch = target;
@@ -337,6 +400,39 @@ float BirdEngine::renderSample()
 
     const bool sounding = stage == Stage::Attack || stage == Stage::Sustain || stage == Stage::Release;
 
+    // Legato articulation
+    if (glidePending)
+    {
+        pendingDelay -= dt;
+        if (pendingDelay <= 0.0) startGlide (pendingTarget);
+    }
+    float dipGain = 1.0f;
+    if (dipT < dipDur)
+    {
+        const float bump = 0.5f - 0.5f * (float) std::cos (kTwoPi * dipT / dipDur); // 0 -> 1 -> 0
+        dipGain = 1.0f - (1.0f - dipFloor) * bump;
+        dipT += dt;
+    }
+
+    // Overblow: harder breath climbs the overtone series (2x, 3x, 4x, 5x the
+    // note), each step at its own threshold; a step back down needs the breath
+    // to fall below that threshold by the hysteresis.
+    if (breathMode && params[kOverblowOn] >= 0.5f && sounding)
+    {
+        const float hyst = params[kOverblowHyst];
+        while (overtone < 5 && breath > params[kOverblow2 + overtone - 1]) ++overtone;
+        while (overtone > 1 && breath < params[kOverblow2 + overtone - 2] - hyst) --overtone;
+    }
+    else
+    {
+        overtone = 1;
+    }
+    {
+        const double target = 12.0 * std::log2 ((double) overtone);
+        const double tau = std::max (0.0005, params[kOverblowTime] * 0.001 / 3.0);
+        overblowSemis += (target - overblowSemis) * (1.0 - std::exp (-dt / tau));
+    }
+
     // Pitch movement, in cents
     double cents = 0.0;
 
@@ -364,10 +460,10 @@ float BirdEngine::renderSample()
         if (glideT >= glideDur) { basePitch = glideTo; gliding = false; }
     }
 
-    const double f0 = std::min (semisToHz (basePitch + bendSemis + cents / 100.0), sr * 0.45);
+    const double f0 = std::min (semisToHz (basePitch + overblowSemis + bendSemis + cents / 100.0), sr * 0.45);
 
     // Loudness
-    float amp = env * (breathMode ? std::pow (breath, 1.4f) : velGain);
+    float amp = env * dipGain * (breathMode ? breath : velGain); // breath is already shaped by the curve
     amp *= dbToGain (wobbleL.next (rng, params[kWobbleRate] * 1.13f, sr) * params[kWobbleLevel]);
 
     // Voice source: whistle plus overtones set by purity, second voice, breath noise.

@@ -8,7 +8,8 @@
 #include <atomic>
 #include <vector>
 
-class PrairieBirdProcessor : public juce::AudioProcessor
+class PrairieBirdProcessor : public juce::AudioProcessor,
+                             private juce::AsyncUpdater
 {
 public:
     PrairieBirdProcessor();
@@ -44,6 +45,7 @@ private:
     void loadFactoryPresets();
     void applyPreset (const pbv::Preset& preset);
     void handleMidi (const juce::MidiMessage& m);
+    void handleAsyncUpdate() override;
 
     pbv::BirdEngine engine;
     pbv::ParamValues values;
@@ -52,6 +54,10 @@ private:
     std::vector<pbv::Preset> factory;
     std::vector<float> scratch;
     int currentProgram = 0;
+
+    // Learn breath range: the audio thread records it, the message thread writes the sliders.
+    bool wasLearning = false;
+    std::atomic<int> learnedFloor { -1 }, learnedCeiling { -1 };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PrairieBirdProcessor)
 };

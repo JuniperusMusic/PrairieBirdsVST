@@ -99,8 +99,8 @@ void PrairieBirdProcessor::applyPreset (const pbv::Preset& preset)
 {
     for (int i = 0; i < pbv::kNumParams; ++i)
     {
-        // Breath mode follows the player's setup, not the bird.
-        if (i == pbv::kBreathMode) continue;
+        // Breath mode and the breath response follow the player's setup, not the bird.
+        if (pbv::isPlayerSetting (i)) continue;
         auto* p = params[(size_t) i];
         p->setValueNotifyingHost (p->convertTo0to1 (preset.values[i]));
     }
@@ -150,6 +150,22 @@ void PrairieBirdProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     for (int i = 0; i < pbv::kNumParams; ++i) values[i] = raw[(size_t) i]->load();
     engine.setParams (values);
 
+    // Learn breath range: switching it on starts recording CC2; switching it off sets floor and ceiling.
+    const bool learning = values[pbv::kBreathLearn] >= 0.5f;
+    if (learning && ! wasLearning)
+        engine.beginBreathLearn();
+    else if (! learning && wasLearning)
+    {
+        int lo = 0, hi = 127;
+        if (engine.endBreathLearn (lo, hi))
+        {
+            learnedFloor = lo;
+            learnedCeiling = hi;
+            triggerAsyncUpdate();
+        }
+    }
+    wasLearning = learning;
+
     const int numSamples = buffer.getNumSamples();
     const bool stereo = buffer.getNumChannels() > 1;
     float* left = buffer.getWritePointer (0);
@@ -176,6 +192,17 @@ void PrairieBirdProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
         for (int n = 0; n < numSamples; ++n) left[n] = 0.5f * (left[n] + right[n]);
 
     for (int ch = 2; ch < buffer.getNumChannels(); ++ch) buffer.clear (ch, 0, numSamples);
+}
+
+void PrairieBirdProcessor::handleAsyncUpdate()
+{
+    const int lo = learnedFloor.exchange (-1), hi = learnedCeiling.exchange (-1);
+    if (lo < 0 || hi < 0) return;
+    for (auto [index, value] : { std::pair { (int) pbv::kBreathFloor, lo }, std::pair { (int) pbv::kBreathCeiling, hi } })
+    {
+        auto* p = params[(size_t) index];
+        p->setValueNotifyingHost (p->convertTo0to1 ((float) value));
+    }
 }
 
 juce::AudioProcessorEditor* PrairieBirdProcessor::createEditor()

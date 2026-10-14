@@ -147,6 +147,85 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(len(song.notes), 1, "legato notes should stay connected")
         self.assertAlmostEqual(cents(self.steady_pitch(x, sr, 0.55, 0.75), 440.0), 200, delta=1)
 
+    def env_db(self, x, sr, win=0.004):
+        n = int(win * sr)
+        frames = x[: len(x) // n * n].reshape(-1, n)
+        return 10 * np.log10(np.mean(frames ** 2, axis=1) + 1e-20), win
+
+    def test_legato_dip_articulates_connected_notes(self):
+        score = "0 on 69 100\n0.4 on 71 100\n0.45 off 69\n0.8 off 71\n"
+        base = ["octave=0", "glideAmount=0", "echoWet=0", *STEADY]
+        dipped, sr = self.render(score, sets=[*base, "legatoDip=20", "legatoDipTime=40"])
+        plain, _ = self.render(score, sets=[*base, "legatoDip=0"])
+        for x, want in ((dipped, -14), (plain, -1)):
+            db, win = self.env_db(x, sr)
+            steady = np.median(db[int(0.25 / win):int(0.38 / win)])
+            low = db[int(0.39 / win):int(0.45 / win)].min() - steady
+            if want < -2:
+                self.assertLess(low, want)
+            else:
+                self.assertGreater(low, want)
+        # The pitch changes at the dip: B4 after it, A4 before it.
+        self.assertAlmostEqual(cents(self.steady_pitch(dipped, sr, 0.2, 0.39), 440.0), 0, delta=1)
+        self.assertAlmostEqual(cents(self.steady_pitch(dipped, sr, 0.5, 0.75), 440.0), 200, delta=1)
+
+    def test_legato_carries_the_sag(self):
+        # The first note sags; a connected note must not jump back up first.
+        x, sr = self.render("0 on 69 100\n0.5 on 70 100\n0.9 off 70\n0.95 off 69\n",
+                            sets=["octave=0", "glideAmount=1", "glideTime=200", "legatoDip=0", "driftSag=-100",
+                                  "wobblePitch=0", "wobbleLevel=0", "driftAmount=0", "scoopDepth=0", "chirpThreshold=128", "echoWet=0"])
+        tr = pa.track(x, sr)
+        t, f = tr.t, tr.f0
+        before = np.nanmedian(f[(t > 0.47) & (t < 0.495)])
+        after = np.nanmedian(f[(t > 0.505) & (t < 0.53)])
+        self.assertLess(abs(cents(after, before)), 15, "pitch jumped at the start of the glide")
+
+    def test_breath_floor_reads_as_silence(self):
+        quiet, sr = self.render("0 cc 2 25\n0 on 69 100\n0.5 off 69\n", sets=["breathMode=true", "breathFloor=30"])
+        blown, _ = self.render("0 cc 2 100\n0 on 69 100\n0.5 off 69\n", sets=["breathMode=true", "breathFloor=30"])
+        self.assertLess(np.abs(quiet).max(), 1e-6)
+        self.assertGreater(self.level_db(blown, sr, 0.2, 0.4), -40)
+
+    def test_breath_curve_shapes_loudness(self):
+        levels = []
+        for curve in ("1", "3"):
+            x, sr = self.render("0 cc 2 64\n0 on 69 100\n0.5 off 69\n",
+                                sets=["breathMode=true", f"breathCurve={curve}", "echoWet=0", "wobbleLevel=0"])
+            levels.append(self.level_db(x, sr, 0.2, 0.4))
+        # Half breath: a curve of 3 is (0.5^3)/(0.5^1) = 1/4 the level, about 12 dB quieter.
+        self.assertAlmostEqual(levels[0] - levels[1], 12.0, delta=1.0)
+
+    def test_breath_attack_minimum(self):
+        # Strong breath already flowing when the key goes down: the attack still takes the minimum time.
+        x, sr = self.render("0 cc 2 127\n0.1 on 69 100\n0.6 off 69\n",
+                            sets=["breathMode=true", "breathAttack=40", "echoWet=0", "wobbleLevel=0", "breathBurst=0"])
+        full = self.level_db(x, sr, 0.3, 0.5)
+        self.assertLess(self.level_db(x, sr, 0.100, 0.106) - full, -15)
+        self.assertGreater(self.level_db(x, sr, 0.145, 0.16) - full, -1)
+
+    def test_overblow_climbs_the_series(self):
+        sets = ["breathMode=true", "overblowOn=true", "breathCurve=1", "octave=0", "echoWet=0",
+                "overblow2=0.6", "overblow3=0.8", "overblow4=1", "overblow5=1", "driftBreathLink=0", *STEADY]
+        score = "0 cc 2 64\n0 on 57 100\n0.5 cc 2 89\n1.0 cc 2 115\n1.5 cc 2 89\n2.0 off 57\n"
+        x, sr = self.render(score, sets=sets)
+        f1 = self.steady_pitch(x, sr, 0.2, 0.45)   # breath 0.50: the note
+        f2 = self.steady_pitch(x, sr, 0.7, 0.95)   # 0.70: 2nd overtone
+        f3 = self.steady_pitch(x, sr, 1.2, 1.45)   # 0.91: 3rd overtone
+        f4 = self.steady_pitch(x, sr, 1.7, 1.95)   # back to 0.70: below 0.8 - 0.05, so down to the 2nd
+        self.assertAlmostEqual(cents(f1, 220.0), 0, delta=2)
+        self.assertAlmostEqual(cents(f2, 440.0), 0, delta=2)
+        self.assertAlmostEqual(cents(f3, 660.0), 0, delta=2)
+        self.assertAlmostEqual(cents(f4, 440.0), 0, delta=2)
+        off, _ = self.render(score, sets=[s for s in sets if s != "overblowOn=true"])
+        self.assertAlmostEqual(cents(self.steady_pitch(off, sr, 1.2, 1.45), 220.0), 0, delta=2)
+
+    def test_overblow_hysteresis_holds_near_the_threshold(self):
+        sets = ["breathMode=true", "overblowOn=true", "breathCurve=1", "octave=0", "echoWet=0",
+                "overblow2=0.6", "overblow3=1", "overblow4=1", "overblow5=1", "overblowHysteresis=0.1", "driftBreathLink=0", *STEADY]
+        # Up past 0.6, then down to 0.55: inside the hysteresis band, so it stays on the 2nd overtone.
+        x, sr = self.render("0 cc 2 89\n0 on 57 100\n0.5 cc 2 70\n1.0 off 57\n", sets=sets)
+        self.assertAlmostEqual(cents(self.steady_pitch(x, sr, 0.7, 0.95), 440.0), 0, delta=2)
+
     def test_unknown_parameter_is_rejected(self):
         d = Path(self.tmp.name)
         (d / "s.txt").write_text("0 on 60 100\n")

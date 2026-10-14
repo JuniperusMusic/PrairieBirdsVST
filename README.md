@@ -52,9 +52,22 @@ terminal as administrator).
   steps. The bird's intervals stay the same.
 - Strike the first key hard (velocity 100 or more) for the intro chirp. The
   whistle then starts about 180 ms later, like the bird.
-- Overlapping (legato) notes glide without a new attack.
+- Overlapping (legato) notes change without a new attack: the loudness dips
+  briefly (Legato dip, Legato dip time) and the pitch moves at the quietest
+  point, like a bird articulating. Set the dip to 0 dB for a plain slur.
 - **Breath mode** on: CC2 (the Yamaha breath controller) sets the loudness and
-  no breath means no sound. Off: velocity and the attack set the loudness.
+  no breath means no sound; the breath shapes each attack, and Breath attack
+  minimum stops a note from snapping on when you are already blowing hard.
+  Off: velocity and the onset set the loudness.
+- **Breath setup:** if your controller never reads zero at rest, switch on
+  *Learn breath range*, breathe from rest to your hardest, and switch it off:
+  Breath floor lands just above your resting value and Breath ceiling at your
+  peak. Breath curve shapes the response (above 1 = more room at soft breath).
+  Bird presets leave these settings alone.
+- **Overblow** (breath mode): harder breath climbs the overtone series, to 2x,
+  3x, 4x and 5x the note, each at its own threshold (Overtone 2 at ... 5 at;
+  1 = never). Hysteresis keeps it from flickering at a threshold, and Overblow
+  time sets how quickly each jump happens.
 
 Not built yet (later build stages): warble, trill and flurry (stage 6); the
 per-note tuning editor and Scala files (stage 7); MIDI learn and the
