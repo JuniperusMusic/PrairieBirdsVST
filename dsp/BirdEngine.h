@@ -48,6 +48,10 @@ public:
     void beginBreathLearn();
     bool endBreathLearn (int& floor, int& ceiling);
 
+    // Tempo for Motion's Sync mode: the host's tempo (0 = unknown), and one tap of Tap tempo.
+    void setHostTempo (double bpm) { hostBpm = bpm; }
+    void tapTempo();
+
 private:
     enum class Stage { Idle, Waiting, Attack, Sustain, Release };
 
@@ -73,7 +77,9 @@ private:
     double transposeSemitones() const;
     void startAttack();
     void startNewNote (int note, int velocity);
-    void legatoTo (int note);
+    void legatoTo (int note, int velocity);
+    void startBreakNote();
+    double motionTempo() const;
     void startGlide (double target);
     float shapeBreath (int cc) const;
     void startRelease();
@@ -130,6 +136,17 @@ private:
     float dipFloor = 1.0f;
     bool glidePending = false;
     double pendingTarget = 0.0, pendingDelay = 0.0;
+
+    // Break mode: the old note releases, silence, then the new note starts fresh
+    bool breakPending = false;
+    int breakNote = -1, breakVel = 100;
+    double breakWait = 0.0;
+
+    // Motion
+    double warblePhase = 0.0, trillT = 0.0;
+    float trillGain = 1.0f, flurryCents = 0.0f, flurryTarget = 0.0f;
+    double flurryHold = 0.0;
+    double hostBpm = 0.0, tapBpm = 0.0, clock = 0.0, lastTap = -1.0e9;
 
     // Overblow: which overtone of the note sounds (1 = the note itself), and the smoothed shift
     int overtone = 1;

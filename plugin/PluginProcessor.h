@@ -57,6 +57,7 @@ private:
 
     // Learn breath range: the audio thread records it, the message thread writes the sliders.
     bool wasLearning = false;
+    bool wasTapping = false;
     std::atomic<int> learnedFloor { -1 }, learnedCeiling { -1 };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PrairieBirdProcessor)

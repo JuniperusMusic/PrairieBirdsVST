@@ -67,6 +67,11 @@ void BirdEngine::reset()
     glidePending = false;
     overtone = 1;
     overblowSemis = 0.0;
+    breakPending = false;
+    warblePhase = trillT = 0.0;
+    trillGain = 1.0f;
+    flurryCents = flurryTarget = 0.0f;
+    flurryHold = 0.0;
     bendSemis = 0.0;
     everPlayed = false;
     timeSinceRelease = 1.0e9;
@@ -149,9 +154,9 @@ void BirdEngine::noteOn (int note, int velocity)
         }
     if (stackSize < 16) stack[stackSize++] = note;
 
-    const bool connected = stage == Stage::Waiting || stage == Stage::Attack || stage == Stage::Sustain;
+    const bool connected = breakPending || stage == Stage::Waiting || stage == Stage::Attack || stage == Stage::Sustain;
     if (connected && stackSize > 1)
-        legatoTo (note);
+        legatoTo (note, velocity);
     else
         startNewNote (note, velocity);
 }
@@ -167,9 +172,14 @@ void BirdEngine::noteOff (int note)
     --stackSize;
 
     if (stackSize == 0)
+    {
+        breakPending = false; // nothing left to come back to
         startRelease();
-    else if (note == currentNote)
-        legatoTo (stack[stackSize - 1]); // fall back to the key still held
+    }
+    else if (note == currentNote || (breakPending && note == breakNote))
+    {
+        legatoTo (stack[stackSize - 1], (int) std::lround (noteVel * 127.0f)); // fall back to the key still held
+    }
 }
 
 void BirdEngine::controller (int cc, int value)
@@ -197,6 +207,7 @@ void BirdEngine::channelPressure (int value) { aftertouch = value / 127.0f; }
 void BirdEngine::allNotesOff()
 {
     stackSize = 0;
+    breakPending = false;
     startRelease();
 }
 
@@ -269,14 +280,33 @@ void BirdEngine::startAttack()
     envStart = env;
     stage = Stage::Attack;
     scoopT = 0.0;
+    trillT = 0.0;
 
     // The burst is a puff of air: in breath mode it follows the breath, not the key.
     burst = params[kBreathBurst] * 0.3f * (breathMode ? breathTarget : velGain);
     burstDecay = (float) std::exp (-1.0 / (0.012 * sr));
 }
 
-void BirdEngine::legatoTo (int note)
+void BirdEngine::legatoTo (int note, int velocity)
 {
+    const int mode = (int) params[kLegatoMode]; // 0 Break, 1 Dip, 2 Glide
+
+    // Break: like the bird's gaps between whistles. The current note releases,
+    // the break passes in silence, then the new key starts as a fresh note.
+    if (mode == 0 || breakPending)
+    {
+        breakNote = note;
+        breakVel = velocity;
+        if (! breakPending)
+        {
+            breakPending = true;
+            const bool waiting = stage == Stage::Waiting;
+            startRelease();
+            breakWait = (waiting ? 0.0 : params[kRelease] * 0.001) + params[kLegatoBreak] * 0.001;
+        }
+        return;
+    }
+
     currentNote = note;
     const double target = semitonesForKey (note);
 
@@ -287,8 +317,8 @@ void BirdEngine::legatoTo (int note)
         return;
     }
 
-    // Articulate like a bird: dip the loudness and change pitch at the quietest point.
-    if (params[kLegatoDip] > 0.0f)
+    // Dip: articulate by dipping the loudness, changing pitch at the quietest point.
+    if (mode == 1 && params[kLegatoDip] > 0.0f)
     {
         dipT = 0.0;
         dipDur = std::max (0.005, params[kLegatoDipTime] * 0.001);
@@ -302,9 +332,48 @@ void BirdEngine::legatoTo (int note)
     startGlide (target);
 }
 
+// The new note after a break: a later note of the phrase, so no chirp and
+// (in Auto) a scoop rising in from below.
+void BirdEngine::startBreakNote()
+{
+    breakPending = false;
+    currentNote = breakNote;
+    noteVel = breakVel / 127.0f;
+    velGain = 1.0f + (std::pow (noteVel, 1.5f) - 1.0f) * params[kVelResponse];
+    basePitch = semitonesForKey (breakNote);
+    gliding = glidePending = false;
+    firstInPhrase = false;
+    sagActive = false;
+    noteAge = 0.0;
+    const int dirMode = (int) params[kScoopDir];
+    const float dir = dirMode == 2 ? 1.0f : -1.0f;
+    scoopStart = dir * params[kScoopDepth] * noteVel;
+    startAttack();
+}
+
+void BirdEngine::tapTempo()
+{
+    const double gap = clock - lastTap;
+    if (gap > 0.2 && gap < 2.0) // 30-300 BPM; a longer pause starts a new count
+        tapBpm = tapBpm > 0.0 ? 0.5 * tapBpm + 0.5 * (60.0 / gap) : 60.0 / gap;
+    lastTap = clock;
+}
+
+double BirdEngine::motionTempo() const
+{
+    switch ((int) params[kTempoSource])
+    {
+        case 0:  if (hostBpm > 0.0) return hostBpm; break; // Cubase
+        case 2:  if (tapBpm > 0.0) return tapBpm; break;   // Tap
+        default: break;
+    }
+    return params[kTypedBpm];
+}
+
 void BirdEngine::startGlide (double target)
 {
     glidePending = false;
+    trillT = 0.0;
 
     // basePitch is where the glide (if any) has reached; carry the first
     // note's sag into the move so the pitch never jumps back.
@@ -351,6 +420,13 @@ void BirdEngine::startRelease()
 float BirdEngine::renderSample()
 {
     const double dt = 1.0 / sr;
+    clock += dt;
+
+    if (breakPending)
+    {
+        breakWait -= dt;
+        if (breakWait <= 0.0 && stackSize > 0) startBreakNote();
+    }
 
     // Controllers and smoothed settings
     breath = breathTarget + (breath - breathTarget) * breathCoeff;
@@ -414,6 +490,45 @@ float BirdEngine::renderSample()
         dipT += dt;
     }
 
+    // Motion. Free: rates in Hz. Sync: warble and trill follow the tempo at the chosen note value.
+    double warbleHz = params[kWarbleRate], trillHz = params[kTrillRate];
+    if (params[kSyncMode] >= 0.5f)
+    {
+        static constexpr double beats[] = { 1.0, 0.5, 1.0 / 3.0, 0.25, 1.0 / 6.0, 0.125 }; // 1/4 .. 1/32
+        const double hz = motionTempo() / 60.0 / beats[std::clamp ((int) params[kSyncDivision], 0, 5)];
+        warbleHz = trillHz = hz;
+    }
+
+    // Trill: the note re-articulates at the trill rate (on 55% of each cycle).
+    // Doublet and Triplet stop after 2 or 3 articulations and hold the last.
+    float trillTarget = 1.0f;
+    if (params[kTrillDepth] > 0.0f && (stage == Stage::Attack || stage == Stage::Sustain))
+    {
+        const double cycle = trillT * trillHz;
+        const int pattern = (int) params[kTrillPattern];
+        const bool holding = pattern > 0 && cycle >= (double) pattern; // Doublet: hold from the 2nd
+        if (! holding && cycle - std::floor (cycle) >= 0.55)
+            trillTarget = 1.0f - params[kTrillDepth];
+        trillT += dt;
+    }
+    trillGain += (trillTarget - trillGain) * (float) (1.0 - std::exp (-dt / 0.002));
+
+    // Flurry: quick random jumps around the note, density events per second up to 12.
+    if (params[kFlurryDensity] > 0.0f && sounding)
+    {
+        if ((rng.uniform() + 1.0f) * 0.5f < params[kFlurryDensity] * 12.0f * (float) dt)
+        {
+            flurryTarget = params[kFlurrySpread] * rng.uniform();
+            flurryHold = 0.06;
+        }
+        if (flurryHold > 0.0 && (flurryHold -= dt) <= 0.0) flurryTarget = 0.0f;
+    }
+    else
+    {
+        flurryTarget = 0.0f;
+    }
+    flurryCents += (flurryTarget - flurryCents) * (float) (1.0 - std::exp (-dt / 0.004));
+
     // Overblow: harder breath climbs the overtone series (2x, 3x, 4x, 5x the
     // note), each step at its own threshold; a step back down needs the breath
     // to fall below that threshold by the hysteresis.
@@ -450,6 +565,10 @@ float BirdEngine::renderSample()
     cents += link * 8.0f; // hard breath pushes slightly sharp
     cents += wobbleP.next (rng, params[kWobbleRate], sr) * params[kWobblePitch];
 
+    warblePhase += warbleHz * dt;
+    if (warblePhase >= 1.0) warblePhase -= std::floor (warblePhase);
+    cents += params[kWarbleDepth] * std::sin (kTwoPi * warblePhase) + flurryCents;
+
     if (gliding)
     {
         glideT += dt;
@@ -463,7 +582,7 @@ float BirdEngine::renderSample()
     const double f0 = std::min (semisToHz (basePitch + overblowSemis + bendSemis + cents / 100.0), sr * 0.45);
 
     // Loudness
-    float amp = env * dipGain * (breathMode ? breath : velGain); // breath is already shaped by the curve
+    float amp = env * dipGain * trillGain * (breathMode ? breath : velGain); // breath is already shaped by the curve
     amp *= dbToGain (wobbleL.next (rng, params[kWobbleRate] * 1.13f, sr) * params[kWobbleLevel]);
 
     // Voice source: whistle plus overtones set by purity, second voice, breath noise.

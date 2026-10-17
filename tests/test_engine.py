@@ -38,7 +38,7 @@ class EngineTests(unittest.TestCase):
     def tearDownClass(cls):
         cls.tmp.cleanup()
 
-    def render(self, score, preset=None, sets=(), tail=0.5):
+    def render(self, score, preset=None, sets=(), tail=0.5, extra=()):
         d = Path(self.tmp.name)
         (d / "score.txt").write_text(score)
         out = d / "out.wav"
@@ -47,6 +47,7 @@ class EngineTests(unittest.TestCase):
             cmd += ["--preset", str(preset)]
         for s in sets:
             cmd += ["--set", s]
+        cmd += list(extra)
         subprocess.run(cmd, check=True)
         x, sr = sf.read(out)
         return x, sr
@@ -142,7 +143,7 @@ class EngineTests(unittest.TestCase):
 
     def test_legato_glides_without_new_attack(self):
         score = "0 on 69 100\n0.4 on 71 100\n0.45 off 69\n0.8 off 71\n"
-        x, sr = self.render(score, sets=["octave=0", "glideAmount=1", "glideTime=50", *STEADY])
+        x, sr = self.render(score, sets=["octave=0", "legatoMode=Glide", "glideAmount=1", "glideTime=50", *STEADY])
         song = pa.analyse(x, sr, floor_db=20)
         self.assertEqual(len(song.notes), 1, "legato notes should stay connected")
         self.assertAlmostEqual(cents(self.steady_pitch(x, sr, 0.55, 0.75), 440.0), 200, delta=1)
@@ -154,7 +155,7 @@ class EngineTests(unittest.TestCase):
 
     def test_legato_dip_articulates_connected_notes(self):
         score = "0 on 69 100\n0.4 on 71 100\n0.45 off 69\n0.8 off 71\n"
-        base = ["octave=0", "glideAmount=0", "echoWet=0", *STEADY]
+        base = ["octave=0", "glideAmount=0", "echoWet=0", "legatoMode=Dip", *STEADY]
         dipped, sr = self.render(score, sets=[*base, "legatoDip=20", "legatoDipTime=40"])
         plain, _ = self.render(score, sets=[*base, "legatoDip=0"])
         for x, want in ((dipped, -14), (plain, -1)):
@@ -172,7 +173,7 @@ class EngineTests(unittest.TestCase):
     def test_legato_carries_the_sag(self):
         # The first note sags; a connected note must not jump back up first.
         x, sr = self.render("0 on 69 100\n0.5 on 70 100\n0.9 off 70\n0.95 off 69\n",
-                            sets=["octave=0", "glideAmount=1", "glideTime=200", "legatoDip=0", "driftSag=-100",
+                            sets=["octave=0", "legatoMode=Glide", "glideAmount=1", "glideTime=200", "driftSag=-100",
                                   "wobblePitch=0", "wobbleLevel=0", "driftAmount=0", "scoopDepth=0", "chirpThreshold=128", "echoWet=0"])
         tr = pa.track(x, sr)
         t, f = tr.t, tr.f0
@@ -225,6 +226,73 @@ class EngineTests(unittest.TestCase):
         # Up past 0.6, then down to 0.55: inside the hysteresis band, so it stays on the 2nd overtone.
         x, sr = self.render("0 cc 2 89\n0 on 57 100\n0.5 cc 2 70\n1.0 off 57\n", sets=sets)
         self.assertAlmostEqual(cents(self.steady_pitch(x, sr, 0.7, 0.95), 440.0), 0, delta=2)
+
+    def test_break_mode_separates_connected_notes(self):
+        # Hold A4; press B4 on top, then let it go: each change is release, a silent break, a fresh note.
+        score = "0 on 69 100\n0.4 on 71 100\n0.9 off 71\n1.5 off 69\n"
+        x, sr = self.render(score, sets=["octave=0", "echoWet=0", "release=10", "legatoBreak=175", *STEADY])
+        full = self.level_db(x, sr, 0.2, 0.38)
+        self.assertLess(self.level_db(x, sr, 0.43, 0.57) - full, -50)   # the break after pressing B4
+        self.assertAlmostEqual(cents(self.steady_pitch(x, sr, 0.68, 0.88), 440.0), 200, delta=1)
+        self.assertLess(self.level_db(x, sr, 0.93, 1.07) - full, -50)   # the break back to A4
+        self.assertAlmostEqual(cents(self.steady_pitch(x, sr, 1.18, 1.45), 440.0), 0, delta=1)
+
+    def test_break_length(self):
+        score = "0 on 69 100\n0.4 on 71 100\n1.0 off 71\n1.0 off 69\n"
+        starts = []
+        for gap in (100, 250):
+            x, sr = self.render(score, sets=["octave=0", "echoWet=0", "release=10", "onset=5", f"legatoBreak={gap}", *STEADY])
+            db, win = self.env_db(x, sr, 0.002)
+            full = np.median(db[int(0.2 / win):int(0.38 / win)])
+            later = np.flatnonzero(db[int(0.45 / win):] > full - 10)
+            starts.append(0.45 + later[0] * win)
+        self.assertAlmostEqual(starts[1] - starts[0], 0.150, delta=0.006)
+
+    def count_dips(self, x, sr, a, b, below_db=-20):
+        db, win = self.env_db(x, sr, 0.002)
+        seg = db[int(a / win):int(b / win)]
+        ref = np.percentile(seg, 90)
+        low = seg < ref + below_db
+        return int(np.sum(low[1:] & ~low[:-1]))
+
+    def test_trill_continuous(self):
+        x, sr = self.render("0 on 69 100\n1.2 off 69\n", sets=["octave=0", "echoWet=0", "onset=5", "trillDepth=1", "trillRate=10",
+                                                               "trillPattern=Continuous", *STEADY])
+        self.assertEqual(self.count_dips(x, sr, 0.2, 1.0), 8)
+
+    def test_trill_doublet_holds_the_last(self):
+        x, sr = self.render("0 on 69 100\n1.0 off 69\n", sets=["octave=0", "echoWet=0", "onset=5", "trillDepth=1", "trillRate=10",
+                                                               "trillPattern=Doublet", *STEADY])
+        self.assertEqual(self.count_dips(x, sr, 0.0, 0.95), 1)
+        x, sr = self.render("0 on 69 100\n1.0 off 69\n", sets=["octave=0", "echoWet=0", "onset=5", "trillDepth=1", "trillRate=10",
+                                                               "trillPattern=Triplet", *STEADY])
+        self.assertEqual(self.count_dips(x, sr, 0.0, 0.95), 2)
+
+    def test_trill_sync_follows_tempo(self):
+        # Sync at 1/8 and 150 BPM: 5 trills a second, whatever the Hz rate says.
+        sets = ["octave=0", "echoWet=0", "onset=5", "trillDepth=1", "trillRate=20", "trillPattern=Continuous",
+                "syncMode=Sync", "syncDivision=1/8", *STEADY]
+        x, sr = self.render("0 on 69 100\n1.2 off 69\n", sets=[*sets, "tempoSource=Cubase"], extra=["--bpm", "150"])
+        self.assertEqual(self.count_dips(x, sr, 0.1, 1.1), 5)
+        x, sr = self.render("0 on 69 100\n1.2 off 69\n", sets=[*sets, "tempoSource=Typed", "typedBpm=75"])
+        self.assertIn(self.count_dips(x, sr, 0.1, 1.1), (2, 3))
+
+    def test_warble_depth(self):
+        x, sr = self.render("0 on 69 100\n1.0 off 69\n", sets=["octave=0", "echoWet=0", "warbleDepth=50", "warbleRate=5", *STEADY])
+        tr = pa.track(x, sr)
+        c = 1200 * np.log2(tr.f0[(tr.t > 0.3) & (tr.t < 0.9)] / 440.0)
+        self.assertAlmostEqual(np.nanmax(c) - np.nanmin(c), 100, delta=12)
+
+    def test_flurry_jumps(self):
+        sets = ["octave=0", "echoWet=0", "flurrySpread=400", *STEADY]
+        x, sr = self.render("0 on 69 100\n2.0 off 69\n", sets=[*sets, "flurryDensity=0.5"])
+        tr = pa.track(x, sr)
+        c = np.abs(1200 * np.log2(tr.f0[(tr.t > 0.2) & (tr.t < 1.9)] / 440.0))
+        self.assertGreater(np.nanmax(c), 100)
+        x, sr = self.render("0 on 69 100\n2.0 off 69\n", sets=[*sets, "flurryDensity=0"])
+        tr = pa.track(x, sr)
+        c = np.abs(1200 * np.log2(tr.f0[(tr.t > 0.2) & (tr.t < 1.9)] / 440.0))
+        self.assertLess(np.nanmax(c), 5)
 
     def test_unknown_parameter_is_rejected(self):
         d = Path(self.tmp.name)

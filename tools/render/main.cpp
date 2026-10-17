@@ -2,7 +2,7 @@
 //
 // Usage:
 //   pbv_render --preset presets/white_throated_sparrow.json --score song.txt --out song.wav
-//              [--set id=value ...] [--sr 48000] [--tail 1.5] [--seed 1] [--mono] [--dump-preset]
+//              [--set id=value ...] [--sr 48000] [--tail 1.5] [--seed 1] [--bpm 120] [--mono] [--dump-preset]
 //
 // Score format: one event per line, times in seconds, '#' starts a comment.
 //   0.000 on 79 100      key 79, velocity 100
@@ -99,7 +99,7 @@ namespace
     void usage()
     {
         std::cerr << "usage: pbv_render --score FILE --out FILE.wav [--preset FILE.json] [--set id=value]...\n"
-                     "                  [--sr 48000] [--tail 1.5] [--seed 1] [--mono]\n"
+                     "                  [--sr 48000] [--tail 1.5] [--seed 1] [--bpm 120] [--mono]\n"
                      "       pbv_render --preset FILE.json --dump-preset\n";
     }
 }
@@ -111,6 +111,7 @@ int main (int argc, char** argv)
     int sampleRate = 48000;
     double tail = 1.5;
     uint32_t seed = 1;
+    double bpm = 0.0;
     bool mono = false, dump = false;
 
     for (int i = 1; i < argc; ++i)
@@ -123,6 +124,7 @@ int main (int argc, char** argv)
         else if (arg == "--set") sets.push_back (next());
         else if (arg == "--sr") sampleRate = std::atoi (next().c_str());
         else if (arg == "--tail") tail = std::atof (next().c_str());
+        else if (arg == "--bpm") bpm = std::atof (next().c_str());
         else if (arg == "--seed") seed = (uint32_t) std::strtoul (next().c_str(), nullptr, 10);
         else if (arg == "--mono") mono = true;
         else if (arg == "--dump-preset") dump = true;
@@ -159,6 +161,7 @@ int main (int argc, char** argv)
     engine.setParams (preset.values);
     engine.prepare (sampleRate, kBlock);
     engine.setSeed (seed);
+    engine.setHostTempo (bpm); // stands in for Cubase's tempo
 
     const double end = (events.empty() ? 0.0 : events.back().time) + tail;
     const int64_t total = (int64_t) (end * sampleRate);

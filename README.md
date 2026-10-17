@@ -52,9 +52,17 @@ terminal as administrator).
   steps. The bird's intervals stay the same.
 - Strike the first key hard (velocity 100 or more) for the intro chirp. The
   whistle then starts about 180 ms later, like the bird.
-- Overlapping (legato) notes change without a new attack: the loudness dips
-  briefly (Legato dip, Legato dip time) and the pitch moves at the quietest
-  point, like a bird articulating. Set the dip to 0 dB for a plain slur.
+- **Connected notes** (a key pressed while another is held, and letting go of
+  it again) follow the *Connected notes* setting:
+  - **Break** (default): the note releases, a silence of *Break length* passes
+    (175 ms, the sparrow's usual gap), then the new note starts fresh, rising
+    in from below, with no chirp.
+  - **Dip**: no new attack; the loudness dips briefly (*Legato dip*, *Legato
+    dip time*) and the pitch moves at the quietest point.
+  - **Glide**: a plain slur, shaped by Glide amount, time and curve.
+- *Phrase gap* doesn't add a break: it decides whether a new note counts as the
+  first of a phrase (falls in from above, sags) or a later one (rises in from
+  below).
 - **Breath mode** on: CC2 (the Yamaha breath controller) sets the loudness and
   no breath means no sound; the breath shapes each attack, and Breath attack
   minimum stops a note from snapping on when you are already blowing hard.
@@ -69,7 +77,15 @@ terminal as administrator).
   1 = never). Hysteresis keeps it from flickering at a threshold, and Overblow
   time sets how quickly each jump happens.
 
-Not built yet (later build stages): warble, trill and flurry (stage 6); the
+- **Motion**: *Warble* is pitch vibrato (rate, depth). *Trill* re-articulates
+  the held note at the trill rate; it is off at *Trill depth* 0. Pattern
+  *Continuous* trills for as long as you hold the key, *Doublet* and *Triplet*
+  play 2 or 3 articulations and hold the last. *Flurry* adds quick random
+  jumps around the note (density, spread). *Free/Sync*: in Sync, warble and
+  trill run at the *Sync division* of the tempo from Cubase, *Typed BPM*, or
+  *Tap tempo* (switch it on and off in time; each switch-on is a tap).
+
+Not built yet (later build stages): the
 per-note tuning editor and Scala files (stage 7); MIDI learn and the
 nanoKONTROL2 map (stage 8); the Retrologue-style panel (stage 9). Their
 settings already exist, so presets and Cubase projects keep working when they

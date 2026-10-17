@@ -166,6 +166,18 @@ void PrairieBirdProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     }
     wasLearning = learning;
 
+    // Tap tempo: each switch-on is one tap. Cubase's tempo feeds Sync when it is the tempo source.
+    const bool tapping = values[pbv::kTapTempo] >= 0.5f;
+    if (tapping && ! wasTapping) engine.tapTempo();
+    wasTapping = tapping;
+
+    double bpm = 0.0;
+    if (auto* head = getPlayHead())
+        if (auto pos = head->getPosition())
+            if (auto hostBpm = pos->getBpm())
+                bpm = *hostBpm;
+    engine.setHostTempo (bpm);
+
     const int numSamples = buffer.getNumSamples();
     const bool stereo = buffer.getNumChannels() > 1;
     float* left = buffer.getWritePointer (0);

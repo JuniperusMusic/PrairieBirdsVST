@@ -78,6 +78,8 @@ struct ParamDef
     X(GlideAmount,    "glideAmount",    "Glide amount",         Glide,  Float,  0,    1,    0.1f,  "",      "",  true)  \
     X(GlideTime,      "glideTime",      "Glide time",           Glide,  Float,  5,    1000, 60,    "ms",    "",  true)  \
     X(GlideCurve,     "glideCurve",     "Glide curve",          Glide,  Float, -1,    1,    0,     "",      "",  true)  \
+    X(LegatoMode,     "legatoMode",     "Connected notes",      Glide,  Choice, 0,    2,    0,     "",      "Break|Dip|Glide", true) \
+    X(LegatoBreak,    "legatoBreak",    "Break length",         Glide,  Float,  0,    500,  175,   "ms",    "",  true)  \
     X(LegatoDip,      "legatoDip",      "Legato dip",           Glide,  Float,  0,    40,   12,    "dB",    "",  true)  \
     X(LegatoDipTime,  "legatoDipTime",  "Legato dip time",      Glide,  Float,  5,    150,  40,    "ms",    "",  true)  \
     /* Drift */ \
@@ -89,18 +91,19 @@ struct ParamDef
     X(WobbleLevel,    "wobbleLevel",    "Wobble level",         Drift,  Float,  0,    6,    1,     "dB",    "",  false) \
     X(WobbleRate,     "wobbleRate",     "Wobble rate",          Drift,  Float,  2,    40,   17,    "Hz",    "",  false) \
     X(PhraseGap,      "phraseGap",      "Phrase gap",           Drift,  Float,  50,   2000, 400,   "ms",    "",  false) \
-    /* Motion (stage 6: stored and automatable now, sounding later) */ \
+    /* Motion: warble, trill, flurry; Free/Sync sets warble and trill rates from a tempo */ \
     X(WarbleRate,     "warbleRate",     "Warble rate",          Motion, Float,  0.5f, 40,   8,     "Hz",    "",  true)  \
     X(WarbleDepth,    "warbleDepth",    "Warble depth",         Motion, Float,  0,    200,  0,     "ct",    "",  true)  \
     X(TrillRate,      "trillRate",      "Trill rate",           Motion, Float,  2,    40,   12,    "Hz",    "",  true)  \
     X(TrillDepth,     "trillDepth",     "Trill depth",          Motion, Float,  0,    1,    0,     "",      "",  true)  \
-    X(TrillPattern,   "trillPattern",   "Trill pattern",        Motion, Choice, 0,    2,    0,     "",      "Off|Doublet|Triplet", true) \
+    X(TrillPattern,   "trillPattern",   "Trill pattern",        Motion, Choice, 0,    2,    0,     "",      "Continuous|Doublet|Triplet", true) \
     X(FlurryDensity,  "flurryDensity",  "Flurry density",       Motion, Float,  0,    1,    0,     "",      "",  true)  \
     X(FlurrySpread,   "flurrySpread",   "Flurry spread",        Motion, Float,  0,    1200, 300,   "ct",    "",  true)  \
     X(SyncMode,       "syncMode",       "Free/Sync",            Motion, Choice, 0,    1,    0,     "",      "Free|Sync", true) \
     X(SyncDivision,   "syncDivision",   "Sync division",        Motion, Choice, 0,    5,    3,     "",      "1/4|1/8|1/8T|1/16|1/16T|1/32", true) \
     X(TempoSource,    "tempoSource",    "Tempo source",         Motion, Choice, 0,    2,    0,     "",      "Cubase|Typed|Tap", true) \
     X(TypedBpm,       "typedBpm",       "Typed BPM",            Motion, Float,  30,   300,  120,   "bpm",   "",  true)  \
+    X(TapTempo,       "tapTempo",       "Tap tempo",            Motion, Bool,   0,    1,    0,     "",      "",  true)  \
     /* Tuning: 12 offsets in cents from equal temperament, counted up from the root */ \
     X(TuneRoot,       "tuneRoot",       "Root note",            Tuning, Choice, 0,    11,   0,     "",      "C|C#|D|D#|E|F|F#|G|G#|A|A#|B", true) \
     X(Tune0,          "tune0",          "Root",                 Tuning, Float, -100,  100,  0,     "ct",    "",  true)  \
@@ -142,7 +145,7 @@ inline const ParamDef& paramDef (int index)
 inline bool isPlayerSetting (int index)
 {
     return index == kBreathMode || index == kBreathFloor || index == kBreathCeiling
-        || index == kBreathCurve || index == kBreathLearn;
+        || index == kBreathCurve || index == kBreathLearn || index == kTapTempo;
 }
 
 // Returns -1 if the id is unknown.
