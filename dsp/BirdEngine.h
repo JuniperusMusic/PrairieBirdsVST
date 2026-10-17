@@ -113,7 +113,7 @@ private:
     bool gliding = false;
     double glideFrom = 0.0, glideTo = 0.0, glideT = 0.0, glideDur = 0.0;
     float scoopStart = 0.0f;
-    double scoopT = 1.0e9;
+    double scoopT = 1.0e9, scoopDur = 0.07;
     bool sagActive = false;
 
     // Intro chirp

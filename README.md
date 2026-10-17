@@ -78,9 +78,11 @@ terminal as administrator).
   time sets how quickly each jump happens.
 
 - **Motion**: *Warble* is pitch vibrato (rate, depth). *Trill* re-articulates
-  the held note at the trill rate; it is off at *Trill depth* 0. Pattern
-  *Continuous* trills for as long as you hold the key, *Doublet* and *Triplet*
-  play 2 or 3 articulations and hold the last. *Flurry* adds quick random
+  the held note at the trill rate, with a silence of *Trill gap* (ms; 0 = off)
+  between articulations. Each articulation uses the bird's own release into
+  the gap and its onset and scoop coming back, shortened to fit a fast trill.
+  Pattern *Continuous* trills for as long as you hold the key, *Doublet* and
+  *Triplet* play 2 or 3 articulations and hold the last. *Flurry* adds quick random
   jumps around the note (density, spread). *Free/Sync*: in Sync, warble and
   trill run at the *Sync division* of the tempo from Cubase, *Typed BPM*, or
   *Tap tempo* (switch it on and off in time; each switch-on is a tap).

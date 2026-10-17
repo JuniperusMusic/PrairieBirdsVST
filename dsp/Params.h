@@ -95,7 +95,7 @@ struct ParamDef
     X(WarbleRate,     "warbleRate",     "Warble rate",          Motion, Float,  0.5f, 40,   8,     "Hz",    "",  true)  \
     X(WarbleDepth,    "warbleDepth",    "Warble depth",         Motion, Float,  0,    200,  0,     "ct",    "",  true)  \
     X(TrillRate,      "trillRate",      "Trill rate",           Motion, Float,  2,    40,   12,    "Hz",    "",  true)  \
-    X(TrillDepth,     "trillDepth",     "Trill depth",          Motion, Float,  0,    1,    0,     "",      "",  true)  \
+    X(TrillGap,       "trillGap",       "Trill gap",            Motion, Float,  0,    200,  0,     "ms",    "",  true)  \
     X(TrillPattern,   "trillPattern",   "Trill pattern",        Motion, Choice, 0,    2,    0,     "",      "Continuous|Doublet|Triplet", true) \
     X(FlurryDensity,  "flurryDensity",  "Flurry density",       Motion, Float,  0,    1,    0,     "",      "",  true)  \
     X(FlurrySpread,   "flurrySpread",   "Flurry spread",        Motion, Float,  0,    1200, 300,   "ct",    "",  true)  \

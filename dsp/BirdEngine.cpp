@@ -280,6 +280,7 @@ void BirdEngine::startAttack()
     envStart = env;
     stage = Stage::Attack;
     scoopT = 0.0;
+    scoopDur = std::max (0.001, params[kScoopTime] * 0.001);
     trillT = 0.0;
 
     // The burst is a puff of air: in breath mode it follows the breath, not the key.
@@ -499,19 +500,46 @@ float BirdEngine::renderSample()
         warbleHz = trillHz = hz;
     }
 
-    // Trill: the note re-articulates at the trill rate (on 55% of each cycle).
-    // Doublet and Triplet stop after 2 or 3 articulations and hold the last.
-    float trillTarget = 1.0f;
-    if (params[kTrillDepth] > 0.0f && (stage == Stage::Attack || stage == Stage::Sustain))
+    // Trill: the note re-articulates at the trill rate. Each cycle the note
+    // sounds, then falls silent for the trill gap. Every articulation is
+    // shaped like the bird's own note: it releases into the gap over the
+    // release time and comes back with the onset curve (in breath mode, the
+    // breath attack minimum) and a scoop rising in from below, both shortened
+    // to fit when the cycle is short. Doublet and Triplet play 2 or 3
+    // articulations and hold the last.
+    trillGain = 1.0f;
+    if (params[kTrillGap] > 0.0f && (stage == Stage::Attack || stage == Stage::Sustain))
     {
-        const double cycle = trillT * trillHz;
-        const int pattern = (int) params[kTrillPattern];
-        const bool holding = pattern > 0 && cycle >= (double) pattern; // Doublet: hold from the 2nd
-        if (! holding && cycle - std::floor (cycle) >= 0.55)
-            trillTarget = 1.0f - params[kTrillDepth];
+        const double period = 1.0 / std::max (0.1, trillHz);
+        const double gap = std::min ((double) params[kTrillGap] * 0.001, period * 0.8);
+        const double sound = period - gap;                 // when the gap starts in each cycle
+        const double release = std::min ((double) params[kRelease] * 0.001, 0.4 * sound);
+        const double onsetFull = breathMode ? params[kBreathAttack] * 0.001
+                                            : params[kOnset] * 0.001 * (1.0 + ((1.5 - noteVel) - 1.0) * params[kVelResponse]);
+        const double attack = std::max (0.001, std::min (onsetFull, 0.5 * sound));
+        const int n = (int) std::floor (trillT / period);  // articulation number, from 0
+        const double tc = trillT - n * period;
+        const int pattern = (int) params[kTrillPattern];   // 0 Continuous, 1 Doublet, 2 Triplet
+        const bool last = pattern > 0 && n >= pattern;     // the held final articulation
+
+        double g = 1.0;
+        if (n > 0 && (pattern == 0 || n <= pattern) && tc < attack)
+            g = raisedCosine (tc / attack);                             // the bird's onset, again
+        else if (! last && tc >= sound - release && tc < sound)
+            g = 1.0 - raisedCosine ((tc - (sound - release)) / release); // the bird's release
+        else if (! last && tc >= sound)
+            g = 0.0;                                                    // the gap
+        trillGain = (float) g;
+
+        // Each new articulation scoops in from below, like a later note of the phrase.
+        if (n > 0 && (pattern == 0 || n <= pattern) && tc < dt * 1.5 && (int) params[kScoopDir] != 2)
+        {
+            scoopStart = -params[kScoopDepth] * noteVel;
+            scoopT = 0.0;
+            scoopDur = std::max (0.001, std::min ((double) params[kScoopTime] * 0.001, 0.5 * sound));
+        }
         trillT += dt;
     }
-    trillGain += (trillTarget - trillGain) * (float) (1.0 - std::exp (-dt / 0.002));
 
     // Flurry: quick random jumps around the note, density events per second up to 12.
     if (params[kFlurryDensity] > 0.0f && sounding)
@@ -551,9 +579,9 @@ float BirdEngine::renderSample()
     // Pitch movement, in cents
     double cents = 0.0;
 
-    if (scoopT < params[kScoopTime] * 0.001)
+    if (scoopT < scoopDur)
     {
-        cents += scoopStart * (1.0 - raisedCosine (scoopT / (params[kScoopTime] * 0.001)));
+        cents += scoopStart * (1.0 - raisedCosine (scoopT / scoopDur));
         scoopT += dt;
     }
 

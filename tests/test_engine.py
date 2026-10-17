@@ -256,21 +256,43 @@ class EngineTests(unittest.TestCase):
         return int(np.sum(low[1:] & ~low[:-1]))
 
     def test_trill_continuous(self):
-        x, sr = self.render("0 on 69 100\n1.2 off 69\n", sets=["octave=0", "echoWet=0", "onset=5", "trillDepth=1", "trillRate=10",
+        x, sr = self.render("0 on 69 100\n1.2 off 69\n", sets=["octave=0", "echoWet=0", "onset=5", "trillGap=40", "trillRate=10",
                                                                "trillPattern=Continuous", *STEADY])
         self.assertEqual(self.count_dips(x, sr, 0.2, 1.0), 8)
 
+    def test_trill_gap_is_silence_of_the_set_length(self):
+        sets = ["octave=0", "echoWet=0", "trillRate=5", "trillPattern=Continuous", "release=10", *STEADY]
+        widths = []
+        for gap in (40, 100):
+            x, sr = self.render("0 on 69 100\n1.2 off 69\n", sets=[*sets, f"trillGap={gap}"])
+            db, win = self.env_db(x, sr, 0.001)
+            full = np.percentile(db[int(0.2 / win):int(1.0 / win)], 90)
+            silent = db[int(0.25 / win):int(0.45 / win)] < full - 40
+            widths.append(silent.sum() * win)
+        self.assertAlmostEqual(widths[1] - widths[0], 0.060, delta=0.006)
+
+    def test_trill_articulations_use_the_birds_attack(self):
+        # A long onset makes each re-articulation rise slowly; a short one makes it snap back.
+        levels = []
+        for onset in (5, 60):
+            x, sr = self.render("0 on 69 100\n1.2 off 69\n", sets=["octave=0", "echoWet=0", "trillRate=4", "trillGap=40",
+                                                                   "trillPattern=Continuous", f"onset={onset}", "velResponse=0", *STEADY])
+            full = self.level_db(x, sr, 0.15, 0.2)
+            levels.append(self.level_db(x, sr, 0.252, 0.262) - full)  # 2-12 ms into the 2nd articulation
+        self.assertGreater(levels[0], -2)
+        self.assertLess(levels[1], -10)
+
     def test_trill_doublet_holds_the_last(self):
-        x, sr = self.render("0 on 69 100\n1.0 off 69\n", sets=["octave=0", "echoWet=0", "onset=5", "trillDepth=1", "trillRate=10",
+        x, sr = self.render("0 on 69 100\n1.0 off 69\n", sets=["octave=0", "echoWet=0", "onset=5", "trillGap=40", "trillRate=10",
                                                                "trillPattern=Doublet", *STEADY])
         self.assertEqual(self.count_dips(x, sr, 0.0, 0.95), 1)
-        x, sr = self.render("0 on 69 100\n1.0 off 69\n", sets=["octave=0", "echoWet=0", "onset=5", "trillDepth=1", "trillRate=10",
+        x, sr = self.render("0 on 69 100\n1.0 off 69\n", sets=["octave=0", "echoWet=0", "onset=5", "trillGap=40", "trillRate=10",
                                                                "trillPattern=Triplet", *STEADY])
         self.assertEqual(self.count_dips(x, sr, 0.0, 0.95), 2)
 
     def test_trill_sync_follows_tempo(self):
         # Sync at 1/8 and 150 BPM: 5 trills a second, whatever the Hz rate says.
-        sets = ["octave=0", "echoWet=0", "onset=5", "trillDepth=1", "trillRate=20", "trillPattern=Continuous",
+        sets = ["octave=0", "echoWet=0", "onset=5", "trillGap=40", "trillRate=20", "trillPattern=Continuous",
                 "syncMode=Sync", "syncDivision=1/8", *STEADY]
         x, sr = self.render("0 on 69 100\n1.2 off 69\n", sets=[*sets, "tempoSource=Cubase"], extra=["--bpm", "150"])
         self.assertEqual(self.count_dips(x, sr, 0.1, 1.1), 5)
