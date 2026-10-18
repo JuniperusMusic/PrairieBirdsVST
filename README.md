@@ -87,11 +87,32 @@ terminal as administrator).
   trill run at the *Sync division* of the tempo from Cubase, *Typed BPM*, or
   *Tap tempo* (switch it on and off in time; each switch-on is a tap).
 
-Not built yet (later build stages): the
-per-note tuning editor and Scala files (stage 7); MIDI learn and the
-nanoKONTROL2 map (stage 8); the Retrologue-style panel (stage 9). Their
-settings already exist, so presets and Cubase projects keep working when they
-arrive.
+- **Trill** has its own on/off switch in the Motion section, a performance
+  switch like Breath mode: bird presets leave it as it is.
+
+## The panel and MIDI learn
+
+The panel has the design's eight sections in signal order, plus Breath and
+overblow. *All settings* (top bar) switches to a list of every setting,
+including the preset-level ones the panel leaves out.
+
+- **MIDI learn:** right-click any control, choose *MIDI Learn*, then move a
+  knob, fader or button on your controller. The control's name shows its CC.
+  Right-click again to *Forget* it. Mappings are saved with the Cubase project.
+- Switches (Trill, Breath mode, Overblow, Free/Sync...) flip on each button
+  press. *Tap* taps on each press.
+- CC2 is always the breath controller and is never assigned; channel-mode
+  messages (CC 120-127) are left alone too.
+- **Controller > Load nanoKONTROL2 map** sets the design's default map (Korg's
+  editor set to plain CC mode): faders 1-8 Purity, Second voice, -, Glide
+  amount, Warble depth, Trill gap, Drift amount, Volume; knobs 1-8 Onset,
+  Scoop depth, Breath burst, Glide time, Warble rate, Trill rate, Drift speed,
+  Openness; Track < > octave down/up; Cycle Free/Sync; Marker Set tap tempo.
+  Fader 3 sends CC2, the breath controller's message, so it is left free.
+  *Clear all MIDI mappings* starts over.
+
+Not built yet: the Scala file import/export (stage 7). The 12 tuning offsets
+and root are on the panel.
 
 ## Rendering and matching
 

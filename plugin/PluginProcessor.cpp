@@ -1,4 +1,5 @@
 #include "PluginProcessor.h"
+#include "PluginEditor.h"
 
 #include "PresetData.h"
 
@@ -51,11 +52,14 @@ juce::AudioProcessorValueTreeState::ParameterLayout PrairieBirdProcessor::create
                 if (wantsSkew (def))
                     range.setSkewForCentre (std::sqrt (def.min * def.max));
                 const auto suffix = unitSuffix (def);
+                // Wide ranges read in whole numbers (83 ms), narrow ones with decimals (0.79).
+                const float span = def.max - def.min;
+                const int decimals = span >= 50.0f ? 0 : span >= 5.0f ? 1 : 2;
                 layout.add (std::make_unique<juce::AudioParameterFloat> (
                     id, def.name, range, def.def,
                     juce::AudioParameterFloatAttributes()
                         .withLabel (def.unit)
-                        .withStringFromValueFunction ([suffix] (float v, int) { return juce::String (v, 2) + suffix; })));
+                        .withStringFromValueFunction ([suffix, decimals] (float v, int) { return juce::String (v, decimals) + suffix; })));
                 break;
             }
         }
@@ -71,8 +75,130 @@ PrairieBirdProcessor::PrairieBirdProcessor()
     {
         raw.push_back (state.getRawParameterValue (pbv::paramDef (i).id));
         params.push_back (state.getParameter (pbv::paramDef (i).id));
+        pending[(size_t) i] = 0.0f;
+        pendingFlag[(size_t) i] = false;
     }
+    for (auto& c : ccMap) c = -1;
     loadFactoryPresets();
+    startTimerHz (30);
+}
+
+PrairieBirdProcessor::~PrairieBirdProcessor()
+{
+    stopTimer();
+}
+
+// ---------------------------------------------------------------- MIDI learn
+
+int PrairieBirdProcessor::ccForParam (int paramIndex) const
+{
+    for (int cc = 0; cc < 128; ++cc)
+        if (ccMap[(size_t) cc].load() == paramIndex) return cc;
+    return -1;
+}
+
+void PrairieBirdProcessor::assignCC (int cc, int target)
+{
+    for (auto& c : ccMap)
+        if (c.load() == target) c = -1; // one controller per setting
+    ccMap[(size_t) cc] = target;
+}
+
+void PrairieBirdProcessor::forgetMidi (int paramIndex)
+{
+    for (auto& c : ccMap)
+        if (c.load() == paramIndex) c = -1;
+}
+
+void PrairieBirdProcessor::clearMidiMap()
+{
+    for (auto& c : ccMap) c = -1;
+}
+
+// The design doc's default map for a nanoKONTROL2 in plain CC mode. Fader 3
+// sends CC2, the breath controller's message, so it stays unassigned.
+void PrairieBirdProcessor::loadNanoKontrolMap()
+{
+    clearMidiMap();
+    const int faders[8] = { pbv::kPurity, pbv::kSecondVoice, -1 /* CC2 = breath */, pbv::kGlideAmount,
+                            pbv::kWarbleDepth, pbv::kTrillGap, pbv::kDriftAmount, pbv::kVolume };
+    const int knobs[8] = { pbv::kOnset, pbv::kScoopDepth, pbv::kBreathBurst, pbv::kGlideTime,
+                           pbv::kWarbleRate, pbv::kTrillRate, pbv::kDriftSpeed, pbv::kBeakOpen };
+    for (int i = 0; i < 8; ++i)
+    {
+        if (faders[i] >= 0) ccMap[(size_t) i] = faders[i];   // faders: CC 0-7
+        ccMap[(size_t) (16 + i)] = knobs[i];                 // knobs: CC 16-23
+    }
+    ccMap[58] = kActionOctaveDown;   // Track <
+    ccMap[59] = kActionOctaveUp;     // Track >
+    ccMap[46] = pbv::kSyncMode;      // Cycle
+    ccMap[60] = kActionTap;          // Marker Set
+}
+
+// Called on the audio thread: the value takes effect in this block, and the
+// timer passes it to the host so the panel and automation follow.
+void PrairieBirdProcessor::setFromMidi (int paramIndex, float value)
+{
+    pending[(size_t) paramIndex] = value;
+    pendingFlag[(size_t) paramIndex] = true;
+    values[paramIndex] = value;
+    engine.setParams (values);
+}
+
+void PrairieBirdProcessor::handleController (int cc, int value)
+{
+    const int prev = lastCC[(size_t) cc];
+    lastCC[(size_t) cc] = value;
+
+    if (cc == 2 || cc >= 120) { engine.controller (cc, value); return; } // breath and channel mode
+
+    if (const int learn = learnParam.load(); learn >= 0)
+    {
+        assignCC (cc, learn);
+        learnParam = -1;
+    }
+
+    const int target = ccMap[(size_t) cc].load();
+    if (target < 0) { engine.controller (cc, value); return; }
+
+    const bool pressed = value >= 64 && prev < 64; // a button press (or a fader crossing halfway up)
+    if (target == kActionOctaveDown || target == kActionOctaveUp)
+    {
+        if (pressed)
+        {
+            const auto& def = pbv::paramDef (pbv::kOctave);
+            const float step = target == kActionOctaveUp ? 1.0f : -1.0f;
+            setFromMidi (pbv::kOctave, juce::jlimit (def.min, def.max, values[pbv::kOctave] + step));
+        }
+        return;
+    }
+    if (target == kActionTap || target == pbv::kTapTempo)
+    {
+        if (pressed) engine.tapTempo();
+        return;
+    }
+    if (target < 0 || target >= pbv::kNumParams) return;
+
+    const auto& def = pbv::paramDef (target);
+    const bool isSwitch = def.kind == pbv::Kind::Bool || (def.kind == pbv::Kind::Choice && def.max <= 1.0f);
+    if (isSwitch)
+    {
+        if (pressed) setFromMidi (target, values[target] >= 0.5f ? def.min : def.max);
+        return;
+    }
+    setFromMidi (target, params[(size_t) target]->convertFrom0to1 (value / 127.0f));
+}
+
+void PrairieBirdProcessor::timerCallback()
+{
+    for (int i = 0; i < pbv::kNumParams; ++i)
+        if (pendingFlag[(size_t) i].exchange (false))
+        {
+            auto* p = params[(size_t) i];
+            p->beginChangeGesture();
+            p->setValueNotifyingHost (p->convertTo0to1 (pending[(size_t) i].load()));
+            p->endChangeGesture();
+        }
 }
 
 void PrairieBirdProcessor::loadFactoryPresets()
@@ -136,7 +262,7 @@ void PrairieBirdProcessor::handleMidi (const juce::MidiMessage& m)
 {
     if (m.isNoteOn()) engine.noteOn (m.getNoteNumber(), m.getVelocity());
     else if (m.isNoteOff()) engine.noteOff (m.getNoteNumber());
-    else if (m.isController()) engine.controller (m.getControllerNumber(), m.getControllerValue());
+    else if (m.isController()) handleController (m.getControllerNumber(), m.getControllerValue());
     else if (m.isPitchWheel()) engine.pitchBend (m.getPitchWheelValue());
     else if (m.isChannelPressure()) engine.channelPressure (m.getChannelPressureValue());
     else if (m.isAftertouch()) engine.channelPressure (m.getAfterTouchValue()); // poly pressure: mono voice, treat as channel
@@ -147,7 +273,8 @@ void PrairieBirdProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
 {
     juce::ScopedNoDenormals noDenormals;
 
-    for (int i = 0; i < pbv::kNumParams; ++i) values[i] = raw[(size_t) i]->load();
+    for (int i = 0; i < pbv::kNumParams; ++i)
+        values[i] = pendingFlag[(size_t) i].load() ? pending[(size_t) i].load() : raw[(size_t) i]->load();
     engine.setParams (values);
 
     // Learn breath range: switching it on starts recording CC2; switching it off sets floor and ceiling.
@@ -204,6 +331,7 @@ void PrairieBirdProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
         for (int n = 0; n < numSamples; ++n) left[n] = 0.5f * (left[n] + right[n]);
 
     for (int ch = 2; ch < buffer.getNumChannels(); ++ch) buffer.clear (ch, 0, numSamples);
+    breathMeter = engine.breathLevel();
 }
 
 void PrairieBirdProcessor::handleAsyncUpdate()
@@ -219,14 +347,24 @@ void PrairieBirdProcessor::handleAsyncUpdate()
 
 juce::AudioProcessorEditor* PrairieBirdProcessor::createEditor()
 {
-    // A plain test panel until build stage 9 (the Retrologue-style panel).
-    return new juce::GenericAudioProcessorEditor (*this);
+    return new PrairieBirdEditor (*this);
 }
 
 void PrairieBirdProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
     auto copy = state.copyState();
     copy.setProperty ("program", currentProgram, nullptr);
+
+    juce::ValueTree map ("MidiMap");
+    for (int cc = 0; cc < 128; ++cc)
+    {
+        const int t = ccMap[(size_t) cc].load();
+        if (t < 0) continue;
+        juce::String target = t == kActionOctaveDown ? "octaveDown" : t == kActionOctaveUp ? "octaveUp"
+                            : t == kActionTap ? "tap" : juce::String (pbv::paramDef (t).id);
+        map.appendChild (juce::ValueTree ("Map", { { "cc", cc }, { "target", target } }), nullptr);
+    }
+    copy.appendChild (map, nullptr);
     if (auto xml = copy.createXml()) copyXmlToBinary (*xml, destData);
 }
 
@@ -237,6 +375,20 @@ void PrairieBirdProcessor::setStateInformation (const void* data, int sizeInByte
         {
             auto tree = juce::ValueTree::fromXml (*xml);
             currentProgram = tree.getProperty ("program", 0);
+
+            if (auto map = tree.getChildWithName ("MidiMap"); map.isValid())
+            {
+                clearMidiMap();
+                for (const auto& m : map)
+                {
+                    const int cc = m.getProperty ("cc", -1);
+                    const juce::String target = m.getProperty ("target").toString();
+                    int t = target == "octaveDown" ? kActionOctaveDown : target == "octaveUp" ? kActionOctaveUp
+                          : target == "tap" ? kActionTap : pbv::findParam (target.toRawUTF8());
+                    if (juce::isPositiveAndBelow (cc, 128) && t >= 0) ccMap[(size_t) cc] = t;
+                }
+                tree.removeChild (map, nullptr);
+            }
             state.replaceState (tree);
         }
 }

@@ -94,8 +94,9 @@ struct ParamDef
     /* Motion: warble, trill, flurry; Free/Sync sets warble and trill rates from a tempo */ \
     X(WarbleRate,     "warbleRate",     "Warble rate",          Motion, Float,  0.5f, 40,   8,     "Hz",    "",  true)  \
     X(WarbleDepth,    "warbleDepth",    "Warble depth",         Motion, Float,  0,    200,  0,     "ct",    "",  true)  \
+    X(TrillOn,        "trillOn",        "Trill",                Motion, Bool,   0,    1,    0,     "",      "",  true)  \
     X(TrillRate,      "trillRate",      "Trill rate",           Motion, Float,  2,    40,   12,    "Hz",    "",  true)  \
-    X(TrillGap,       "trillGap",       "Trill gap",            Motion, Float,  0,    200,  0,     "ms",    "",  true)  \
+    X(TrillGap,       "trillGap",       "Trill gap",            Motion, Float,  0,    200,  40,    "ms",    "",  true)  \
     X(TrillPattern,   "trillPattern",   "Trill pattern",        Motion, Choice, 0,    2,    0,     "",      "Continuous|Doublet|Triplet", true) \
     X(FlurryDensity,  "flurryDensity",  "Flurry density",       Motion, Float,  0,    1,    0,     "",      "",  true)  \
     X(FlurrySpread,   "flurrySpread",   "Flurry spread",        Motion, Float,  0,    1200, 300,   "ct",    "",  true)  \
@@ -141,11 +142,12 @@ inline const ParamDef& paramDef (int index)
     return defs[index];
 }
 
-// Settings that belong to the player's controller setup: loading a bird preset leaves them as they are.
+// Settings that belong to the player's setup or performance (breath controller,
+// trill switch, tap tempo): loading a bird preset leaves them as they are.
 inline bool isPlayerSetting (int index)
 {
     return index == kBreathMode || index == kBreathFloor || index == kBreathCeiling
-        || index == kBreathCurve || index == kBreathLearn || index == kTapTempo;
+        || index == kBreathCurve || index == kBreathLearn || index == kTapTempo || index == kTrillOn;
 }
 
 // Returns -1 if the id is unknown.

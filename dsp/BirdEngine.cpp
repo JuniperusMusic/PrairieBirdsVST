@@ -508,7 +508,7 @@ float BirdEngine::renderSample()
     // to fit when the cycle is short. Doublet and Triplet play 2 or 3
     // articulations and hold the last.
     trillGain = 1.0f;
-    if (params[kTrillGap] > 0.0f && (stage == Stage::Attack || stage == Stage::Sustain))
+    if (params[kTrillOn] >= 0.5f && params[kTrillGap] > 0.0f && (stage == Stage::Attack || stage == Stage::Sustain))
     {
         const double period = 1.0 / std::max (0.1, trillHz);
         const double gap = std::min ((double) params[kTrillGap] * 0.001, period * 0.8);

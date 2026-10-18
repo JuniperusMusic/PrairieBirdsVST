@@ -30,6 +30,8 @@
     "wobbleLevel": 1.0,
     "wobbleRate": 17,
     "trillPattern": "Doublet",
+    "trillRate": 6,
+    "trillGap": 50,
     "tuneRoot": "G",
     "tune4": -34,
     "tune5": 49,

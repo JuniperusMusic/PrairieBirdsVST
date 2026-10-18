@@ -38,6 +38,9 @@ jobs:
           pip install numpy scipy soundfile
           PBV_RENDER="build/tools/render/pbv_render.exe" python -m unittest discover tests -v
 
+      - name: Test plugin (MIDI learn, saved mappings, presets)
+        run: ctest --test-dir build -R plugin_tests --output-on-failure
+
       - name: Package
         shell: bash
         run: |

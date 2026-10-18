@@ -52,6 +52,9 @@ public:
     void setHostTempo (double bpm) { hostBpm = bpm; }
     void tapTempo();
 
+    // Breath after floor, ceiling and curve (0..1), for a meter.
+    float breathLevel() const { return breath; }
+
 private:
     enum class Stage { Idle, Waiting, Attack, Sustain, Release };
 

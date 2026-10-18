@@ -21,6 +21,7 @@ juce_add_binary_data(PrairieBirdPresets
         ${CMAKE_SOURCE_DIR}/presets/white_throated_sparrow.json)
 
 target_sources(PrairieBirdVoice PRIVATE
+    PluginEditor.cpp
     PluginProcessor.cpp)
 
 target_compile_definitions(PrairieBirdVoice PUBLIC
@@ -38,3 +39,20 @@ target_link_libraries(PrairieBirdVoice
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags
         juce::juce_recommended_warning_flags)
+
+# Plugin-level tests: MIDI learn, mappings saved with the project, presets.
+juce_add_console_app(pbv_plugin_tests PRODUCT_NAME "pbv_plugin_tests")
+target_sources(pbv_plugin_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/tests/plugin_tests.cpp
+    PluginEditor.cpp
+    PluginProcessor.cpp)
+target_include_directories(pbv_plugin_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(pbv_plugin_tests PRIVATE
+    JUCE_WEB_BROWSER=0
+    JUCE_USE_CURL=0)
+target_link_libraries(pbv_plugin_tests PRIVATE
+    pbv_dsp
+    PrairieBirdPresets
+    juce::juce_audio_utils
+    juce::juce_recommended_config_flags)
+add_test(NAME plugin_tests COMMAND pbv_plugin_tests)
