@@ -276,13 +276,15 @@ PrairieBirdEditor::PrairieBirdEditor (PrairieBirdProcessor& owner)
     addAndMakeVisible (prevPreset);
     addAndMakeVisible (nextPreset);
 
-    controllerMenu.onClick = [this]
+    // The safe pointer is made here, not inside the nested lambda: MSVC reads
+    // `this` there as the outer lambda.
+    controllerMenu.onClick = [this, safe = juce::Component::SafePointer<PrairieBirdEditor> (this)]
     {
         juce::PopupMenu m;
         m.addItem (1, "Load nanoKONTROL2 map");
         m.addItem (2, "Clear all MIDI mappings");
         m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (controllerMenu),
-                         [safe = juce::Component::SafePointer<PrairieBirdEditor> (this)] (int r)
+                         [safe] (int r)
                          {
                              if (safe == nullptr) return;
                              if (r == 1) safe->proc.loadNanoKontrolMap();
