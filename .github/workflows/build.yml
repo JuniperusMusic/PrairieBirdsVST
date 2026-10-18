@@ -30,10 +30,11 @@ jobs:
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
-        shell: bash
         run: |
-          set -o pipefail
-          cmake --build build --parallel 2>&1 | tee build.log
+          cmake --build build --parallel *> build.log
+          $code = $LASTEXITCODE
+          Get-Content build.log
+          exit $code
 
       # Compiler errors as annotations, readable from the run page and the API.
       - name: Report build errors
