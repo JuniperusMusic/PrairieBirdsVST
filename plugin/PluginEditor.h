@@ -7,6 +7,7 @@
 
 #include <juce_audio_utils/juce_audio_utils.h>
 
+#include <cmath>
 #include <functional>
 #include <memory>
 #include <vector>

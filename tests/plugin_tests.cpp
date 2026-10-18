@@ -2,6 +2,7 @@
 // switches, saved mappings, the nanoKONTROL2 map and preset loading.
 #include "PluginProcessor.h"
 
+#include <cmath>
 #include <iostream>
 
 namespace
@@ -33,7 +34,7 @@ namespace
 
 int main()
 {
-    juce::ScopedJuceInitialiser_GUI juce;
+    juce::ScopedJuceInitialiser_GUI juceInit; // message manager for timers and async updates
     PrairieBirdProcessor p;
     p.prepareToPlay (48000.0, 256);
 

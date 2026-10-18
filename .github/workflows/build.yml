@@ -30,7 +30,19 @@ jobs:
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
-        run: cmake --build build --parallel
+        shell: bash
+        run: |
+          set -o pipefail
+          cmake --build build --parallel 2>&1 | tee build.log
+
+      # Compiler errors as annotations, readable from the run page and the API.
+      - name: Report build errors
+        if: failure()
+        shell: bash
+        run: |
+          grep -E "error C[0-9]+|error LNK[0-9]+|fatal error" build.log | sort -u | head -20 | while IFS= read -r line; do
+            echo "::error::${line//$'\r'/}"
+          done
 
       - name: Test engine
         shell: bash
